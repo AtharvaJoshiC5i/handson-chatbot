@@ -1,0 +1,591 @@
+[
+  {
+    "id": "E001",
+    "category": "account",
+    "customer_id": "CUST001",
+    "question": "What is my account status?",
+    "expected_intent": "GET_ACCOUNT_STATUS",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E002",
+    "category": "account",
+    "customer_id": "CUST002",
+    "question": "Is my account active?",
+    "expected_intent": "GET_ACCOUNT_STATUS",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E003",
+    "category": "account",
+    "customer_id": "CUST004",
+    "question": "What is the current status of my account?",
+    "expected_intent": "GET_ACCOUNT_STATUS",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E004",
+    "category": "account",
+    "customer_id": "CUST005",
+    "question": "Tell me about my account status.",
+    "expected_intent": "GET_ACCOUNT_STATUS",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E005",
+    "category": "account",
+    "customer_id": "CUST003",
+    "question": "Is my NexaTel account currently active?",
+    "expected_intent": "GET_ACCOUNT_STATUS",
+    "expected_parameters": {}
+  },
+
+  {
+    "id": "E006",
+    "category": "plans",
+    "customer_id": "CUST001",
+    "question": "What plan am I currently on?",
+    "expected_intent": "GET_CURRENT_PLAN",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E007",
+    "category": "plans",
+    "customer_id": "CUST002",
+    "question": "Which NexaTel plan do I have?",
+    "expected_intent": "GET_CURRENT_PLAN",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E008",
+    "category": "plans",
+    "customer_id": "CUST003",
+    "question": "Can you tell me my current plan?",
+    "expected_intent": "GET_CURRENT_PLAN",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E009",
+    "category": "plans",
+    "customer_id": "CUST005",
+    "question": "What subscription am I using?",
+    "expected_intent": "GET_CURRENT_PLAN",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E010",
+    "category": "plans",
+    "customer_id": "CUST001",
+    "question": "When will my plan renew?",
+    "expected_intent": "GET_PLAN_RENEWAL",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E011",
+    "category": "plans",
+    "customer_id": "CUST002",
+    "question": "When is my next plan renewal?",
+    "expected_intent": "GET_PLAN_RENEWAL",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E012",
+    "category": "plans",
+    "customer_id": "CUST005",
+    "question": "What date does my subscription renew?",
+    "expected_intent": "GET_PLAN_RENEWAL",
+    "expected_parameters": {}
+  },
+
+  {
+    "id": "E013",
+    "category": "usage",
+    "customer_id": "CUST001",
+    "question": "How much data have I used this month?",
+    "expected_intent": "GET_DATA_USAGE",
+    "expected_parameters": {
+      "time_range": "CURRENT_MONTH"
+    }
+  },
+  {
+    "id": "E014",
+    "category": "usage",
+    "customer_id": "CUST002",
+    "question": "How much mobile data have I consumed this month?",
+    "expected_intent": "GET_DATA_USAGE",
+    "expected_parameters": {
+      "time_range": "CURRENT_MONTH"
+    }
+  },
+  {
+    "id": "E015",
+    "category": "usage",
+    "customer_id": "CUST005",
+    "question": "Show me my data usage for this month.",
+    "expected_intent": "GET_DATA_USAGE",
+    "expected_parameters": {
+      "time_range": "CURRENT_MONTH"
+    }
+  },
+  {
+    "id": "E016",
+    "category": "usage",
+    "customer_id": "CUST001",
+    "question": "How much data did I use last month?",
+    "expected_intent": "GET_DATA_USAGE",
+    "expected_parameters": {
+      "time_range": "LAST_MONTH"
+    }
+  },
+  {
+    "id": "E017",
+    "category": "usage",
+    "customer_id": "CUST002",
+    "question": "Show my data consumption from last month.",
+    "expected_intent": "GET_DATA_USAGE",
+    "expected_parameters": {
+      "time_range": "LAST_MONTH"
+    }
+  },
+  {
+    "id": "E018",
+    "category": "usage",
+    "customer_id": "CUST003",
+    "question": "How much data have I used this year?",
+    "expected_intent": "GET_DATA_USAGE",
+    "expected_parameters": {
+      "time_range": "CURRENT_YEAR"
+    }
+  },
+  {
+    "id": "E019",
+    "category": "usage",
+    "customer_id": "CUST001",
+    "question": "How many voice minutes have I used this month?",
+    "expected_intent": "GET_VOICE_USAGE",
+    "expected_parameters": {
+      "time_range": "CURRENT_MONTH"
+    }
+  },
+  {
+    "id": "E020",
+    "category": "usage",
+    "customer_id": "CUST002",
+    "question": "How many call minutes have I consumed this month?",
+    "expected_intent": "GET_VOICE_USAGE",
+    "expected_parameters": {
+      "time_range": "CURRENT_MONTH"
+    }
+  },
+  {
+    "id": "E021",
+    "category": "usage",
+    "customer_id": "CUST005",
+    "question": "Show my voice usage for last month.",
+    "expected_intent": "GET_VOICE_USAGE",
+    "expected_parameters": {
+      "time_range": "LAST_MONTH"
+    }
+  },
+  {
+    "id": "E022",
+    "category": "usage",
+    "customer_id": "CUST003",
+    "question": "How many minutes have I used this year?",
+    "expected_intent": "GET_VOICE_USAGE",
+    "expected_parameters": {
+      "time_range": "CURRENT_YEAR"
+    }
+  },
+
+  {
+    "id": "E023",
+    "category": "billing",
+    "customer_id": "CUST001",
+    "question": "What is my current bill?",
+    "expected_intent": "GET_CURRENT_BILL",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E024",
+    "category": "billing",
+    "customer_id": "CUST002",
+    "question": "How much is my current bill?",
+    "expected_intent": "GET_CURRENT_BILL",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E025",
+    "category": "billing",
+    "customer_id": "CUST004",
+    "question": "Show me my current bill.",
+    "expected_intent": "GET_CURRENT_BILL",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E026",
+    "category": "billing",
+    "customer_id": "CUST005",
+    "question": "What do I currently owe?",
+    "expected_intent": "GET_CURRENT_BILL",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E027",
+    "category": "billing",
+    "customer_id": "CUST001",
+    "question": "Show my bill history.",
+    "expected_intent": "GET_BILL_HISTORY",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E028",
+    "category": "billing",
+    "customer_id": "CUST002",
+    "question": "Show me my last 5 bills.",
+    "expected_intent": "GET_BILL_HISTORY",
+    "expected_parameters": {
+      "limit": 5
+    }
+  },
+  {
+    "id": "E029",
+    "category": "billing",
+    "customer_id": "CUST005",
+    "question": "Show my last 3 billing records.",
+    "expected_intent": "GET_BILL_HISTORY",
+    "expected_parameters": {
+      "limit": 3
+    }
+  },
+  {
+    "id": "E030",
+    "category": "billing",
+    "customer_id": "CUST003",
+    "question": "Can I see my recent bills?",
+    "expected_intent": "GET_BILL_HISTORY",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E031",
+    "category": "billing",
+    "customer_id": "CUST001",
+    "question": "How much have I spent on my bills?",
+    "expected_intent": "GET_TOTAL_SPENDING",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E032",
+    "category": "billing",
+    "customer_id": "CUST005",
+    "question": "What is my total spending?",
+    "expected_intent": "GET_TOTAL_SPENDING",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E033",
+    "category": "billing",
+    "customer_id": "CUST002",
+    "question": "How much have I spent on NexaTel?",
+    "expected_intent": "GET_TOTAL_SPENDING",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E034",
+    "category": "billing",
+    "customer_id": "CUST005",
+    "question": "Compare my current bill with my previous bill.",
+    "expected_intent": "GET_BILL_COMPARISON",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E035",
+    "category": "billing",
+    "customer_id": "CUST001",
+    "question": "How does my latest bill compare with the previous one?",
+    "expected_intent": "GET_BILL_COMPARISON",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E036",
+    "category": "billing",
+    "customer_id": "CUST005",
+    "question": "Compare BILL009 and BILL010.",
+    "expected_intent": "GET_BILL_COMPARISON",
+    "expected_parameters": {
+      "current_bill_id": "BILL009",
+      "previous_bill_id": "BILL010"
+    }
+  },
+
+  {
+    "id": "E037",
+    "category": "payments",
+    "customer_id": "CUST001",
+    "question": "What is the status of my payment?",
+    "expected_intent": "GET_PAYMENT_STATUS",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E038",
+    "category": "payments",
+    "customer_id": "CUST002",
+    "question": "Did my latest payment go through?",
+    "expected_intent": "GET_PAYMENT_STATUS",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E039",
+    "category": "payments",
+    "customer_id": "CUST004",
+    "question": "What happened with my recent payment?",
+    "expected_intent": "GET_PAYMENT_STATUS",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E040",
+    "category": "payments",
+    "customer_id": "CUST005",
+    "question": "Show my payment history.",
+    "expected_intent": "GET_PAYMENT_HISTORY",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E041",
+    "category": "payments",
+    "customer_id": "CUST001",
+    "question": "Show my last 5 payments.",
+    "expected_intent": "GET_PAYMENT_HISTORY",
+    "expected_parameters": {
+      "limit": 5
+    }
+  },
+  {
+    "id": "E042",
+    "category": "payments",
+    "customer_id": "CUST002",
+    "question": "Can I see my recent payment records?",
+    "expected_intent": "GET_PAYMENT_HISTORY",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E043",
+    "category": "payments",
+    "customer_id": "CUST005",
+    "question": "List my last 3 payments.",
+    "expected_intent": "GET_PAYMENT_HISTORY",
+    "expected_parameters": {
+      "limit": 3
+    }
+  },
+
+  {
+    "id": "E044",
+    "category": "support",
+    "customer_id": "CUST001",
+    "question": "What support tickets do I have?",
+    "expected_intent": "GET_SUPPORT_TICKETS",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E045",
+    "category": "support",
+    "customer_id": "CUST003",
+    "question": "Show me my support tickets.",
+    "expected_intent": "GET_SUPPORT_TICKETS",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E046",
+    "category": "support",
+    "customer_id": "CUST004",
+    "question": "Do I have any open support tickets?",
+    "expected_intent": "GET_SUPPORT_TICKETS",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E047",
+    "category": "support",
+    "customer_id": "CUST005",
+    "question": "Can you show my recent support cases?",
+    "expected_intent": "GET_SUPPORT_TICKETS",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E048",
+    "category": "support",
+    "customer_id": "CUST002",
+    "question": "What tickets are associated with my account?",
+    "expected_intent": "GET_SUPPORT_TICKETS",
+    "expected_parameters": {}
+  },
+
+  {
+    "id": "E049",
+    "category": "devices",
+    "customer_id": "CUST001",
+    "question": "What devices are on my account?",
+    "expected_intent": "GET_DEVICE_INFORMATION",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E050",
+    "category": "devices",
+    "customer_id": "CUST002",
+    "question": "Show me my registered devices.",
+    "expected_intent": "GET_DEVICE_INFORMATION",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E051",
+    "category": "devices",
+    "customer_id": "CUST003",
+    "question": "Which devices do I have?",
+    "expected_intent": "GET_DEVICE_INFORMATION",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E052",
+    "category": "devices",
+    "customer_id": "CUST005",
+    "question": "Tell me about the devices linked to my account.",
+    "expected_intent": "GET_DEVICE_INFORMATION",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E053",
+    "category": "devices",
+    "customer_id": "CUST004",
+    "question": "What phones or devices are registered to me?",
+    "expected_intent": "GET_DEVICE_INFORMATION",
+    "expected_parameters": {}
+  },
+
+  {
+    "id": "E054",
+    "category": "unsupported",
+    "customer_id": "CUST001",
+    "question": "Can you change my mobile number?",
+    "expected_intent": "UNSUPPORTED",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E055",
+    "category": "unsupported",
+    "customer_id": "CUST002",
+    "question": "Please upgrade my plan to the most expensive one.",
+    "expected_intent": "UNSUPPORTED",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E056",
+    "category": "unsupported",
+    "customer_id": "CUST003",
+    "question": "Can you pay my bill for me?",
+    "expected_intent": "UNSUPPORTED",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E057",
+    "category": "unsupported",
+    "customer_id": "CUST004",
+    "question": "Cancel my subscription.",
+    "expected_intent": "UNSUPPORTED",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E058",
+    "category": "unsupported",
+    "customer_id": "CUST005",
+    "question": "Can you issue me a new SIM card?",
+    "expected_intent": "UNSUPPORTED",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E059",
+    "category": "unsupported",
+    "customer_id": "CUST001",
+    "question": "Transfer my account to another person.",
+    "expected_intent": "UNSUPPORTED",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E060",
+    "category": "unsupported",
+    "customer_id": "CUST002",
+    "question": "Book a technician visit for tomorrow.",
+    "expected_intent": "UNSUPPORTED",
+    "expected_parameters": {}
+  },
+
+  {
+    "id": "E061",
+    "category": "edge_case",
+    "customer_id": "CUST001",
+    "question": "bill",
+    "expected_intent": "GET_CURRENT_BILL",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E062",
+    "category": "edge_case",
+    "customer_id": "CUST001",
+    "question": "usage",
+    "expected_intent": "UNSUPPORTED",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E063",
+    "category": "edge_case",
+    "customer_id": "CUST001",
+    "question": "payments",
+    "expected_intent": "GET_PAYMENT_HISTORY",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E064",
+    "category": "edge_case",
+    "customer_id": "CUST001",
+    "question": "What is my data usage?",
+    "expected_intent": "GET_DATA_USAGE",
+    "expected_parameters": {
+      "time_range": "CURRENT_MONTH"
+    }
+  },
+  {
+    "id": "E065",
+    "category": "edge_case",
+    "customer_id": "CUST001",
+    "question": "How much do I owe?",
+    "expected_intent": "GET_CURRENT_BILL",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E066",
+    "category": "edge_case",
+    "customer_id": "CUST005",
+    "question": "Compare the bills.",
+    "expected_intent": "GET_BILL_COMPARISON",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E067",
+    "category": "edge_case",
+    "customer_id": "CUST001",
+    "question": "Show me my last 2 bills.",
+    "expected_intent": "GET_BILL_HISTORY",
+    "expected_parameters": {
+      "limit": 2
+    }
+  },
+  {
+    "id": "E068",
+    "category": "edge_case",
+    "customer_id": "CUST001",
+    "question": "How many minutes did I use last month?",
+    "expected_intent": "GET_VOICE_USAGE",
+    "expected_parameters": {
+      "time_range": "LAST_MONTH"
+    }
+  }
+]

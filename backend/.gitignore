@@ -1,0 +1,34 @@
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+!.env.template
+*.secret
+secrets/
+credentials/
+
+# Python runtime and test artifacts
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+
+# Local databases and generated data
+*.db
+*.sqlite
+*.sqlite3
+data/*
+!data/.gitkeep
+
+# Logs, keys, certificates, and local archives
+*.log
+logs/
+*.pem
+*.key
+*.p12
+*.pfx
+*.zip
