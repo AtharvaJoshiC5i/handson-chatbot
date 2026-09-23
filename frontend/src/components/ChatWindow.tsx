@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 
+import { Bot } from "lucide-react";
+
 import type { ChatMessage } from "../types/chat";
 
 import { MessageBubble } from "./MessageBubble";
@@ -19,26 +21,22 @@ export function ChatWindow({ messages, loading = false }: ChatWindowProps) {
   }, [messages, loading]);
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[#f5f8f7] px-4 py-6 sm:px-6">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-8 sm:py-6">
+      <div className="mx-auto flex w-full max-w-190 flex-col gap-7">
         {messages.map((message) => (
           <MessageBubble key={message.id} message={message} />
         ))}
 
         {loading && (
-          <div className="flex justify-start">
-            <div className="rounded-2xl rounded-bl-md border border-[#dce7e4] bg-white px-4 py-3 shadow-sm">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-slate-500">
-                  NexaTel AI is thinking
-                </span>
-
-                <span className="flex gap-1">
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.3s]" />
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400 [animation-delay:-0.15s]" />
-                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-slate-400" />
-                </span>
-              </div>
+          <div className="flex items-start gap-3">
+            <div className="grid size-8 shrink-0 place-items-center rounded-xl bg-[#123442] text-sm text-white shadow-sm shadow-[#123442]/20">
+              <Bot size={16} strokeWidth={2.2} aria-hidden="true" />
+            </div>
+            <div className="pt-1 text-sm leading-7 text-[#71858a]">
+              NexaTel AI is thinking{" "}
+              <span className="animate-pulse tracking-[0.18em] text-[#138d80]">
+                •••
+              </span>
             </div>
           </div>
         )}

@@ -12,20 +12,13 @@ export function CustomerSelector({
   disabled = false,
 }: CustomerSelectorProps) {
   return (
-    <div className="flex flex-col gap-1">
-      <label
-        htmlFor="customer-selector"
-        className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500"
-      >
-        Customer
-      </label>
-
+    <div>
       <select
         id="customer-selector"
         value={customerId}
         onChange={(event) => onCustomerChange(event.target.value)}
         disabled={disabled}
-        className="rounded-lg border border-slate-300 bg-white/80 px-3 py-2 text-xs font-semibold text-slate-700 outline-none transition hover:border-slate-400 focus:border-teal-600 focus:ring-2 focus:ring-teal-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+        className="min-w-28 rounded-xl border border-[#d2e0de] bg-white px-3 py-2 text-xs font-bold text-[#36515b] outline-none transition hover:border-[#9fcac1] focus:border-[#42a99d] focus:ring-4 focus:ring-[#c9ece5] disabled:cursor-not-allowed disabled:bg-[#f1f5f4]"
       >
         {CUSTOMER_IDS.map((id) => (
           <option key={id} value={id}>
