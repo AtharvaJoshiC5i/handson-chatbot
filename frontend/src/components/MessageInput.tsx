@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-
-import { ArrowUp, CornerDownLeft, LoaderCircle, Sparkles } from "lucide-react";
+import { ArrowUp, LoaderCircle } from "lucide-react";
 
 interface MessageInputProps {
   onSend: (message: string) => void;
@@ -8,13 +7,13 @@ interface MessageInputProps {
 }
 
 const MAX_LENGTH = 4000;
+const MAX_HEIGHT = 160;
 
 export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
   const [message, setMessage] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const hasMessage = message.trim().length > 0;
-  const showCharacterCount = message.length >= 3000;
+  const canSend = message.trim().length > 0 && !disabled;
 
   const resizeTextarea = () => {
     const textarea = textareaRef.current;
@@ -23,8 +22,8 @@ export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
       return;
     }
 
-    textarea.style.height = "0px";
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 144)}px`;
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, MAX_HEIGHT)}px`;
   };
 
   useEffect(() => {
@@ -40,10 +39,13 @@ export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
 
     onSend(trimmedMessage);
     setMessage("");
+
+    requestAnimationFrame(() => {
+      textareaRef.current?.focus();
+    });
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Prevent Enter from submitting while an IME/composition is active.
     if (event.nativeEvent.isComposing) {
       return;
     }
@@ -54,98 +56,81 @@ export function MessageInput({ onSend, disabled = false }: MessageInputProps) {
     }
   };
 
-  const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setMessage(event.target.value);
-  };
-
   return (
-    <div className="w-full shrink-0 px-4 pb-4 pt-3 sm:px-6 sm:pb-6">
+    <div className="w-full shrink-0 px-4 pb-5 pt-3 sm:px-6 sm:pb-6">
       <form
         onSubmit={(event) => {
           event.preventDefault();
           handleSubmit();
         }}
-        className="mx-auto w-full max-w-[820px]"
+        className="mx-auto w-full max-w-[780px]"
       >
         <div
           className={[
-            "rounded-[22px] border bg-white shadow-[0_12px_32px_rgba(25,61,67,0.06)] transition-[border-color,box-shadow]",
-            "border-[#cfdfdc]",
-            "focus-within:border-[#42a99d]",
-            "focus-within:shadow-[0_0_0_4px_rgba(20,184,166,0.10),0_16px_32px_rgba(25,61,67,0.09)]",
-            disabled ? "opacity-75" : "",
+            "relative rounded-[20px] border bg-white",
+            "border-[#d9dddf]",
+            "shadow-[0_1px_2px_rgba(15,23,42,0.02),0_4px_14px_rgba(15,23,42,0.04)]",
+            "transition-[border-color,box-shadow] duration-150",
+            "hover:border-[#c9ced1]",
+            "focus-within:border-[#b9c0c3]",
+            "focus-within:shadow-[0_1px_2px_rgba(15,23,42,0.03),0_5px_18px_rgba(15,23,42,0.06)]",
+            disabled ? "bg-[#fafafa]" : "",
           ].join(" ")}
         >
-          <div className="flex items-center gap-2 border-b border-[#edf2f0] px-4 pb-2.5 pt-3">
-            <Sparkles size={14} className="text-[#138d80]" aria-hidden="true" />
-            <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#577174]">
-              Ask NexaTel AI
-            </span>
-            <span className="ml-auto text-[10px] text-[#a0aeae]">Account-aware</span>
-          </div>
-
-          <div className="flex items-end gap-3 px-4 py-3">
+          <div className="flex items-end gap-2 px-2.5 py-2">
             <textarea
               ref={textareaRef}
               value={message}
-              onChange={handleChange}
+              onChange={(event) => setMessage(event.target.value)}
               onKeyDown={handleKeyDown}
               disabled={disabled}
               rows={1}
               maxLength={MAX_LENGTH}
               aria-label="Message"
-              placeholder="Ask about your plan, usage, bill, payments, tickets..."
+              placeholder="Ask anything..."
               className={[
-                "min-h-12 max-h-36 flex-1 resize-none overflow-y-auto",
-                "bg-transparent px-0 py-1",
-                "text-[15px] leading-6 text-slate-800",
+                "min-h-10 max-h-[160px] flex-1",
+                "resize-none overflow-y-auto",
+                "bg-transparent",
+                "px-2.5 py-2",
+                "text-[15px] leading-6 text-[#1f2933]",
+                "placeholder:text-[#8b9499]",
                 "outline-none",
-                "placeholder:text-slate-400",
-                "disabled:cursor-not-allowed disabled:placeholder:text-slate-300",
+                "disabled:cursor-not-allowed",
+                "disabled:placeholder:text-[#b9bec1]",
                 "[scrollbar-width:thin]",
               ].join(" ")}
             />
 
             <button
               type="submit"
-              disabled={disabled || !hasMessage}
+              disabled={!canSend}
               aria-label={disabled ? "Sending message" : "Send message"}
               aria-busy={disabled}
               className={[
-                "grid h-10 w-10 shrink-0 place-items-center rounded-xl",
-                "transition-colors duration-150",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2",
-                hasMessage && !disabled
-                  ? "bg-slate-900 text-white hover:bg-slate-800 active:bg-slate-950"
-                  : "cursor-not-allowed bg-slate-100 text-slate-400",
+                "mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center",
+                "rounded-full",
+                "transition-[background-color,color,transform] duration-150",
+                "focus-visible:outline-none",
+                "focus-visible:ring-2 focus-visible:ring-[#1f2933]",
+                "focus-visible:ring-offset-2",
+                canSend
+                  ? "bg-[#1f2933] text-white hover:bg-[#111827] active:scale-[0.96]"
+                  : "cursor-not-allowed bg-[#eceff0] text-[#9aa1a5]",
               ].join(" ")}
             >
               {disabled ? (
-                <LoaderCircle size={17} className="animate-spin" aria-hidden="true" />
+                <LoaderCircle
+                  size={15}
+                  strokeWidth={2}
+                  className="animate-spin"
+                  aria-hidden="true"
+                />
               ) : (
-                <ArrowUp size={17} strokeWidth={2.4} aria-hidden="true" />
+                <ArrowUp size={16} strokeWidth={2.25} aria-hidden="true" />
               )}
             </button>
           </div>
-
-          {showCharacterCount && (
-            <div className="flex justify-end px-4 pb-2.5">
-              <span className="text-[11px] tabular-nums text-slate-400">
-                {message.length.toLocaleString()}/{MAX_LENGTH.toLocaleString()}
-              </span>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-2 flex items-center justify-between px-1 text-[11px] text-slate-400">
-          <span className="hidden sm:inline">Answers grounded in your selected account</span>
-
-          <span className="ml-auto flex items-center gap-1.5">
-            <CornerDownLeft size={12} aria-hidden="true" />
-            Enter to send
-            <span className="text-slate-300">·</span>
-            Shift + Enter for a new line
-          </span>
         </div>
       </form>
     </div>

@@ -1,11 +1,38 @@
-import type { ChatMessage } from "../types/chat";
+import { useState } from "react";
+import { ArrowUpRight, Check, Copy } from "lucide-react";
 
-import { ArrowRight, Bot } from "lucide-react";
+import type { ChatMessage } from "../types/chat";
 
 interface MessageBubbleProps {
   message: ChatMessage;
   onOptionSelect?: (message: string) => void;
   optionsDisabled?: boolean;
+}
+
+function formatTime(date: Date) {
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getStatusLabel(status: string) {
+  switch (status) {
+    case "VERIFIED":
+      return "Verified";
+
+    case "NOT_FOUND":
+      return "Not found";
+
+    case "UNSUPPORTED":
+      return "Unsupported";
+
+    case "API_ERROR":
+      return "Error";
+
+    default:
+      return status;
+  }
 }
 
 export function MessageBubble({
@@ -14,76 +41,119 @@ export function MessageBubble({
   optionsDisabled = false,
 }: MessageBubbleProps) {
   const isUser = message.role === "user";
+  const [isCopied, setIsCopied] = useState(false);
+
+  if (isUser) {
+    return (
+      <div className="group flex w-full justify-end">
+        <div className="relative max-w-[78%] sm:max-w-[72%]">
+          <button
+            type="button"
+            aria-label="Copy message"
+            onClick={async () => {
+              try {
+                await navigator.clipboard.writeText(message.content);
+                setIsCopied(true);
+                window.setTimeout(() => setIsCopied(false), 1200);
+              } catch {
+                setIsCopied(false);
+              }
+            }}
+            className="
+              absolute -left-10 top-1/2 -translate-y-1/2
+              flex h-7 w-7 items-center justify-center
+              rounded-md border border-[#e2e2df] bg-white text-[#555552]
+              opacity-0 shadow-sm transition-opacity duration-150
+              pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100
+              group-focus-within:pointer-events-auto group-focus-within:opacity-100
+              hover:border-[#c9c9c5] hover:text-[#292927]
+            "
+          >
+            {isCopied ? (
+              <Check size={14} strokeWidth={2} aria-hidden="true" />
+            ) : (
+              <Copy size={14} strokeWidth={2} aria-hidden="true" />
+            )}
+          </button>
+
+          <div className="rounded-[18px] bg-[#f1f1ef] px-4 py-2.5 text-[13px] leading-[1.6] text-[#292927]">
+            <p className="whitespace-pre-wrap wrap-break-word">
+              {message.content}
+            </p>
+          </div>
+          <div className="mt-1 text-[10px] leading-4 text-[#b0b0ac] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+            {formatTime(message.createdAt)}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div
-      className={`flex w-full items-start gap-3 ${isUser ? "justify-end" : "justify-start"}`}
-    >
-      {!isUser && (
-        <div className="grid size-8 shrink-0 place-items-center rounded-xl bg-[#123442] text-sm text-white shadow-sm shadow-[#123442]/20">
-          <Bot size={16} strokeWidth={2.2} aria-hidden="true" />
+    <div className="group w-full">
+      {/* Assistant response */}
+      <div className="text-[13px] leading-[1.7] text-[#292927]">
+        <p className="whitespace-pre-wrap break-words">{message.content}</p>
+      </div>
+
+      {/* Suggested actions */}
+      {message.options && message.options.length > 0 && (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {message.options.map((option) => (
+            <button
+              key={option.message}
+              type="button"
+              disabled={optionsDisabled}
+              onClick={() => onOptionSelect?.(option.message)}
+              className={[
+                "group/option inline-flex min-h-8 items-center gap-1.5",
+                "rounded-lg border border-[#e2e2df]",
+                "bg-white px-2.5 py-1.5",
+                "text-left text-[11px] font-medium text-[#555552]",
+                "transition-colors duration-150",
+                "hover:border-[#c9c9c5]",
+                "hover:bg-[#f7f7f5]",
+                "hover:text-[#292927]",
+                "focus-visible:outline-none",
+                "focus-visible:ring-2 focus-visible:ring-[#b8b8b3]",
+                "focus-visible:ring-offset-2",
+                "disabled:pointer-events-none",
+                "disabled:opacity-40",
+              ].join(" ")}
+            >
+              <span>{option.label}</span>
+
+              <ArrowUpRight
+                size={12}
+                strokeWidth={1.8}
+                className="shrink-0 text-[#9a9a96] transition-colors group-hover/option:text-[#555552]"
+                aria-hidden="true"
+              />
+            </button>
+          ))}
         </div>
       )}
-      <div
-        className={`max-w-[88%] ${isUser ? "rounded-2xl rounded-br-md bg-[#173b4a] px-4 py-3 text-white shadow-lg shadow-[#173b4a]/10" : "pt-1 text-[#294551]"}`}
-      >
-        <div className="whitespace-pre-wrap wrap-break-word text-sm leading-7">
-          {message.content}
-        </div>
 
-        {!isUser && message.options && message.options.length > 0 && (
-          <div className="mt-4 grid gap-2 sm:grid-cols-2">
-            {message.options.map((option) => (
-              <button
-                key={option.message}
-                type="button"
-                disabled={optionsDisabled}
-                onClick={() => onOptionSelect?.(option.message)}
-                className="group flex min-h-10 items-center justify-between gap-3 rounded-xl border border-[#b9d8d1] bg-white px-3 py-2 text-left text-xs font-bold text-[#24545a] shadow-sm transition hover:border-[#42a99d] hover:bg-[#f1faf7] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <span>{option.label}</span>
-                <ArrowRight
-                  size={15}
-                  className="shrink-0 text-[#138d80] transition-transform group-hover:translate-x-0.5"
-                  aria-hidden="true"
-                />
-              </button>
-            ))}
-          </div>
-        )}
-
-        {!isUser && message.status && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#e7efed] pt-2">
-            <span
-              className={`rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.06em] ${
-                message.status === "VERIFIED"
-                  ? "bg-[#e4f5ef] text-[#147866]"
-                  : message.status === "NOT_FOUND"
-                    ? "bg-[#fff5dc] text-[#9d6b18]"
-                    : message.status === "UNSUPPORTED"
-                      ? "bg-[#edf1f1] text-[#607278]"
-                      : "bg-[#fff0ed] text-[#a2493d]"
-              }`}
-            >
-              {message.status}
+      {/* Secondary metadata */}
+      {(message.status || message.source) && (
+        <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] leading-4 text-[#9a9a96]">
+          {message.status && (
+            <span className="font-medium text-[#777773]">
+              {getStatusLabel(message.status)}
             </span>
+          )}
 
-            {message.source && (
-              <span className="text-[10px] text-[#9aa8aa]">
-                Source: {message.source}
-              </span>
-            )}
-          </div>
-        )}
+          {message.status && message.source && (
+            <span aria-hidden="true">·</span>
+          )}
 
-        <div
-          className={`mt-1 text-[10px] ${isUser ? "text-[#a9c0c7]" : "text-[#a1afb0]"}`}
-        >
-          {message.createdAt.toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
+          {message.source && <span>{message.source}</span>}
         </div>
+      )}
+
+      {/* Timestamp — intentionally subtle */}
+      <div className="mt-1 text-[10px] leading-4 text-[#b0b0ac] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
+        {formatTime(message.createdAt)}
       </div>
     </div>
   );
