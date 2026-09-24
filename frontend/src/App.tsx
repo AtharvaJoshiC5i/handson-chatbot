@@ -85,6 +85,7 @@ export default function App() {
         content: response.message,
         status: response.status,
         source: response.source,
+        options: response.options,
         createdAt: new Date(),
       };
 
@@ -123,7 +124,7 @@ export default function App() {
             <p className="m-0 text-[10px] font-bold uppercase tracking-[0.18em] text-[#138d80]">
               NexaTel
             </p>
-            <p className="m-0 text-sm font-bold text-[#17313d]">Concierge</p>
+            
           </div>
         </div>
 
@@ -152,7 +153,7 @@ export default function App() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="shrink-0 border-b border-[#dfe8e5] bg-white/85 backdrop-blur-xl">
-          <div className="flex h-[68px] items-center justify-between gap-5 px-5 sm:px-8">
+          <div className="flex h-17 items-center justify-between gap-5 px-5 sm:px-8">
             <div className="flex items-center gap-2.5 text-sm font-bold text-[#17313d] lg:hidden">
               <div className="grid size-8 place-items-center rounded-lg bg-[#123442] text-xs text-white">
                 <Sparkles size={15} strokeWidth={2.2} aria-hidden="true" />
@@ -205,7 +206,11 @@ export default function App() {
               </div>
             )}
 
-            <ChatWindow messages={messages} loading={loading} />
+            <ChatWindow
+              messages={messages}
+              loading={loading}
+              onOptionSelect={handleSend}
+            />
 
             <MessageInput onSend={handleSend} disabled={loading} />
           </div>

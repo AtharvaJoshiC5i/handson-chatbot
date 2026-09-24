@@ -7,7 +7,7 @@ import sqlite3
 from app.llm.client import GroqLLMClient
 from app.llm.extractor import IntentExtractor
 from app.intent.router import IntentRouter
-from app.models.api import ChatResponse
+from app.models.api import ChatOption, ChatResponse
 from app.models.domain import CustomerContext
 from app.services.response_service import ResponseService
 from app.services.structured_data_service import StructuredDataService
@@ -46,7 +46,7 @@ class ChatService:
         """Process a customer chat message."""
 
         try:
-            _, truth_result = (
+            llm_intent, truth_result = (
                 self._structured_data_service.execute(
                     db=db,
                     customer=customer,
@@ -63,6 +63,17 @@ class ChatService:
             return self._build_chat_response(
                 truth_result=truth_result,
                 response_text=response_text,
+                options=(
+                    [
+                        ChatOption(
+                            label=option.label,
+                            message=option.message,
+                        )
+                        for option in llm_intent.options
+                    ]
+                    if truth_result.status.value == "AMBIGUOUS"
+                    else []
+                ),
             )
 
         except NexaTelError:
@@ -73,6 +84,7 @@ class ChatService:
         *,
         truth_result: TruthResult,
         response_text: str,
+        options: list[ChatOption],
     ) -> ChatResponse:
         """Build the public API response."""
 
@@ -84,4 +96,5 @@ class ChatService:
                 if truth_result.source
                 else None
             ),
+            options=options,
         )

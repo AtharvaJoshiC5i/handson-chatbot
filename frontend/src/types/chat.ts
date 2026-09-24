@@ -12,6 +12,12 @@ export interface ChatResponse {
   message: string;
   status: ChatResponseStatus;
   source: string | null;
+  options: ChatOption[];
+}
+
+export interface ChatOption {
+  label: string;
+  message: string;
 }
 
 export interface ChatMessage {
@@ -20,5 +26,6 @@ export interface ChatMessage {
   content: string;
   status?: ChatResponseStatus;
   source?: string | null;
+  options?: ChatOption[];
   createdAt: Date;
 }

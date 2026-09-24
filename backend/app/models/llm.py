@@ -7,6 +7,15 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.domain import Intent, TimeRange
 
 
+class IntentOption(BaseModel):
+    """Safe follow-up choice for an ambiguous request."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    label: str = Field(min_length=1, max_length=80)
+    message: str = Field(min_length=1, max_length=4000)
+
+
 class IntentParameters(BaseModel):
     """Parameters extracted by the LLM.
 
@@ -37,3 +46,5 @@ class LLMIntentResponse(BaseModel):
     parameters: IntentParameters = Field(
         default_factory=IntentParameters,
     )
+    clarification: str | None = None
+    options: list[IntentOption] = Field(default_factory=list, max_length=8)

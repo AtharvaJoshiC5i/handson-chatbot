@@ -15,7 +15,7 @@ export class ApiError extends Error {
 function getErrorMessage(responseBody: unknown, statusCode: number): string {
   if (typeof responseBody !== "object" || responseBody === null) {
     return statusCode === 404
-      ? "The chat endpoint was not found. Check that the backend is running on port 8000."
+      ? "The chat endpoint was not found. Check that the backend is running on port 8001."
       : "The request could not be completed.";
   }
 
@@ -44,7 +44,7 @@ function getErrorMessage(responseBody: unknown, statusCode: number): string {
   }
 
   return statusCode === 404
-    ? "The chat endpoint was not found. Check that the backend is running on port 8000."
+    ? "The chat endpoint was not found. Check that the backend is running on port 8001."
     : "The request could not be completed.";
 }
 
@@ -67,7 +67,7 @@ export async function sendChatMessage(
     });
   } catch {
     throw new ApiError(
-      "The NexaTel backend is unavailable. Make sure it is running on port 8000.",
+      "The NexaTel backend is unavailable. Make sure it is running on port 8001.",
       0,
     );
   }

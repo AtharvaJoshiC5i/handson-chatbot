@@ -17,6 +17,15 @@ class ChatRequest(BaseModel):
     )
 
 
+class ChatOption(BaseModel):
+    """Selectable follow-up question shown for an ambiguous request."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    label: str
+    message: str
+
+
 class ChatResponse(BaseModel):
     """Public chat response."""
 
@@ -25,6 +34,7 @@ class ChatResponse(BaseModel):
     message: str
     status: str
     source: str | None = None
+    options: list[ChatOption] = Field(default_factory=list)
 
 
 class HealthResponse(BaseModel):

@@ -20,7 +20,10 @@ from app.handlers import (
     get_voice_usage,
     get_bill_history_for_customer,
 )
-from app.intent.parameters import validate_required_parameters
+from app.intent.parameters import (
+    validate_allowed_parameters,
+    validate_required_parameters,
+)
 from app.intent.registry import get_intent_definition
 from app.models.domain import CustomerContext, Intent
 from app.truth.result import TruthResult, unsupported_result
@@ -73,6 +76,13 @@ class IntentRouter:
         validate_required_parameters(
             intent_parameters=parameters,
             required_parameters=definition.required_parameters,
+        )
+        validate_allowed_parameters(
+            intent_parameters=parameters,
+            allowed_parameters=(
+                definition.required_parameters
+                | definition.optional_parameters
+            ),
         )
 
         handler = HANDLERS.get(

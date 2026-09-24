@@ -9,9 +9,14 @@ import { MessageBubble } from "./MessageBubble";
 interface ChatWindowProps {
   messages: ChatMessage[];
   loading?: boolean;
+  onOptionSelect?: (message: string) => void;
 }
 
-export function ChatWindow({ messages, loading = false }: ChatWindowProps) {
+export function ChatWindow({
+  messages,
+  loading = false,
+  onOptionSelect,
+}: ChatWindowProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -24,7 +29,12 @@ export function ChatWindow({ messages, loading = false }: ChatWindowProps) {
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-8 sm:py-6">
       <div className="mx-auto flex w-full max-w-190 flex-col gap-7">
         {messages.map((message) => (
-          <MessageBubble key={message.id} message={message} />
+          <MessageBubble
+            key={message.id}
+            message={message}
+            onOptionSelect={onOptionSelect}
+            optionsDisabled={loading}
+          />
         ))}
 
         {loading && (

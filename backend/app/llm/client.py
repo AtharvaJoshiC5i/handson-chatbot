@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from typing import Any
 
@@ -11,8 +12,212 @@ from openai import RateLimitError
 
 from app.config.settings import Settings
 from app.llm.prompts import SYSTEM_PROMPT
+from app.models.domain import Intent, TimeRange
 from app.models.llm import LLMIntentResponse
+from app.models.llm import IntentOption, IntentParameters
 from app.utils.errors import LLMError
+
+
+COMPACT_SYSTEM_PROMPT = """
+Classify the user's NexaTel support request. Return ONLY valid JSON in this
+form: {"intent":"INTENT_NAME","parameters":{}}. For ambiguous requests,
+use intent UNSUPPORTED, add a concise "clarification" question, and
+include an "options" array of objects with short "label" and complete
+follow-up "message" values.
+
+Allowed intents: GET_CURRENT_PLAN, GET_ACCOUNT_STATUS, GET_PLAN_RENEWAL,
+GET_DATA_USAGE, GET_VOICE_USAGE, GET_CURRENT_BILL, GET_BILL_HISTORY,
+GET_TOTAL_SPENDING, GET_BILL_COMPARISON, GET_PAYMENT_STATUS,
+GET_PAYMENT_HISTORY, GET_SUPPORT_TICKETS, GET_DEVICE_INFORMATION, UNSUPPORTED.
+
+For data or voice usage without a period, use
+{"time_range":"CURRENT_MONTH"}. For history requests, use a numeric
+{"limit":number} only when the user specifies one. For bill comparison,
+extract explicit BILL IDs as current_bill_id and previous_bill_id.
+""".strip()
+
+
+def classify_deterministic_request(
+    user_message: str,
+) -> LLMIntentResponse | None:
+    """Classify high-confidence requests without using the LLM."""
+
+    normalized = re.sub(
+        r"[.!?]+$",
+        "",
+        user_message.lower().strip(),
+    ).strip()
+    parameters = IntentParameters()
+
+    if (
+        any(term in normalized for term in ("used", "usage", "consumption"))
+        and not any(
+            term in normalized
+            for term in ("data", "gb", "voice", "minute", "call")
+        )
+    ):
+        return LLMIntentResponse(
+            intent=Intent.UNSUPPORTED,
+            clarification=(
+                "Do you mean your data usage or your voice/call-minute usage?"
+            ),
+            options=[
+                IntentOption(
+                    label="Data usage",
+                    message="How much data have I used this month?",
+                ),
+                IntentOption(
+                    label="Voice usage",
+                    message="How many voice minutes have I used this month?",
+                ),
+            ],
+        )
+
+    if "plan" in normalized and any(
+        term in normalized for term in ("bill", "invoice", "owe", "amount due")
+    ):
+        return LLMIntentResponse(
+            intent=Intent.UNSUPPORTED,
+            clarification=(
+                "Do you mean your current plan or your current bill?"
+            ),
+            options=[
+                IntentOption(
+                    label="Current plan",
+                    message="What is my current plan?",
+                ),
+                IntentOption(
+                    label="Current bill",
+                    message="What is my current bill?",
+                ),
+            ],
+        )
+
+    if normalized in {
+        "show me my information",
+        "show my information",
+        "what are my latest details",
+        "what are my details",
+        "what happened with my account",
+    }:
+        return LLMIntentResponse(
+            intent=Intent.UNSUPPORTED,
+            clarification=(
+                "What would you like to know: your account, plan, usage, "
+                "billing, payment, support tickets, or devices?"
+            ),
+            options=[
+                IntentOption(label="Account status", message="What is my account status?"),
+                IntentOption(label="Current plan", message="What is my current plan?"),
+                IntentOption(label="Usage", message="How much data have I used this month?"),
+                IntentOption(label="Current bill", message="What is my current bill?"),
+                IntentOption(label="Payment status", message="What is the status of my latest payment?"),
+                IntentOption(label="Support tickets", message="What support tickets do I have?"),
+                IntentOption(label="Devices", message="What devices are on my account?"),
+            ],
+        )
+
+    limit_match = re.search(r"\b(?:last|first|top)\s+(\d+)\b", normalized)
+    bill_ids = re.findall(r"\bbill\s*\d+\b", normalized, flags=re.IGNORECASE)
+    if limit_match:
+        parameters.limit = int(limit_match.group(1))
+    if len(bill_ids) >= 2:
+        parameters.current_bill_id = bill_ids[0].upper().replace(" ", "")
+        parameters.previous_bill_id = bill_ids[1].upper().replace(" ", "")
+
+    if "payment" in normalized or normalized == "payments":
+        intent = (
+            Intent.GET_PAYMENT_STATUS
+            if any(
+                term in normalized
+                for term in (
+                    "status",
+                    "pending",
+                    "successful",
+                    "success",
+                    "failed",
+                    "fail",
+                    "went through",
+                    "gone through",
+                )
+            )
+            else Intent.GET_PAYMENT_HISTORY
+        )
+    elif (
+        "compare" in normalized
+        or "comparison" in normalized
+        or (
+            "bill" in normalized
+            and "different" in normalized
+            and "last" in normalized
+        )
+    ):
+        intent = Intent.GET_BILL_COMPARISON
+    elif (
+        "support" in normalized
+        or "ticket" in normalized
+        or "case" in normalized
+    ):
+        intent = Intent.GET_SUPPORT_TICKETS
+    elif "spend" in normalized or "spent" in normalized:
+        intent = Intent.GET_TOTAL_SPENDING
+    elif (
+        "bill" in normalized
+        or "invoice" in normalized
+        or "owe" in normalized
+        or "amount due" in normalized
+    ):
+        intent = (
+            Intent.GET_BILL_HISTORY
+            if "history" in normalized or "last" in normalized
+            else Intent.GET_CURRENT_BILL
+        )
+    elif "data" in normalized or "gb" in normalized:
+        intent = Intent.GET_DATA_USAGE
+        parameters.time_range = (
+            TimeRange.CURRENT_YEAR
+            if "this year" in normalized or "current year" in normalized
+            else TimeRange.LAST_MONTH
+            if "last month" in normalized
+            else TimeRange.CURRENT_MONTH
+        )
+    elif "minute" in normalized or "voice" in normalized or "call" in normalized:
+        intent = Intent.GET_VOICE_USAGE
+        parameters.time_range = (
+            TimeRange.CURRENT_YEAR
+            if "this year" in normalized or "current year" in normalized
+            else TimeRange.LAST_MONTH
+            if "last month" in normalized
+            else TimeRange.CURRENT_MONTH
+        )
+    elif "renew" in normalized or "expiry" in normalized or "expire" in normalized:
+        intent = Intent.GET_PLAN_RENEWAL
+    elif "device" in normalized or "phone" in normalized or "router" in normalized:
+        intent = Intent.GET_DEVICE_INFORMATION
+    elif "plan" in normalized or "subscription" in normalized:
+        intent = Intent.GET_CURRENT_PLAN
+    elif (
+        "account" in normalized
+        or "status" in normalized
+        or "active" in normalized
+        or "suspended" in normalized
+        or "cancelled" in normalized
+    ):
+        intent = Intent.GET_ACCOUNT_STATUS
+    else:
+        return None
+
+    return LLMIntentResponse(intent=intent, parameters=parameters)
+
+
+def classify_prompt_guard_request(
+    user_message: str,
+) -> LLMIntentResponse:
+    """Classify requests when the configured model only returns guard scores."""
+
+    return classify_deterministic_request(user_message) or LLMIntentResponse(
+        intent=Intent.UNSUPPORTED,
+    )
 
 
 class GroqLLMClient:
@@ -43,16 +248,51 @@ class GroqLLMClient:
     ) -> LLMIntentResponse:
         """Extract a structured NexaTel intent from user text."""
 
+        deterministic_result = classify_deterministic_request(
+            user_message
+        )
+
+        if deterministic_result is not None:
+            return deterministic_result
+
+        system_prompt = (
+            COMPACT_SYSTEM_PROMPT
+            if "prompt-guard" in self._model.lower()
+            else SYSTEM_PROMPT
+        )
+
+        if "prompt-guard" in self._model.lower():
+            return classify_prompt_guard_request(user_message)
+        messages = (
+            [
+                {
+                    "role": "user",
+                    "content": (
+                        f"{system_prompt}\n\n"
+                        f"User request: {user_message}"
+                    ),
+                }
+            ]
+            if "prompt-guard" in self._model.lower()
+            else [
+                {
+                    "role": "system",
+                    "content": system_prompt,
+                },
+                {
+                    "role": "user",
+                    "content": user_message,
+                },
+            ]
+        )
+
         for attempt in range(3):
             try:
-                response = self._client.responses.create(
-                    input=(
-                        f"{SYSTEM_PROMPT}\n\n"
-                        "User message:\n"
-                        f"{user_message}"
-                    ),
+                response = self._client.chat.completions.create(
+                    messages=messages,
                     model=self._model,
                     temperature=0,
+                    max_tokens=256,
                     timeout=self._timeout,
                 )
                 break
@@ -69,7 +309,7 @@ class GroqLLMClient:
                 ) from exc
 
         try:
-            content = response.output_text
+            content = response.choices[0].message.content
 
             if not content:
                 raise ValueError(

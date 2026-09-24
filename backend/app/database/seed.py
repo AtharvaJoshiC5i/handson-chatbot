@@ -8,7 +8,7 @@ SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
 def _insert_customers(connection: sqlite3.Connection) -> None:
     connection.executemany(
         """
-        INSERT INTO customers (
+        INSERT OR IGNORE INTO customers (
             customer_id,
             name,
             email,
@@ -65,6 +65,33 @@ def _insert_customers(connection: sqlite3.Connection) -> None:
                 "ACTIVE",
                 "2025-01-18",
             ),
+            (
+                "CUST006",
+                "Meera Nair",
+                "meera.nair@nexatel.example",
+                "+919810000006",
+                "Chennai",
+                "ACTIVE",
+                "2025-03-22",
+            ),
+            (
+                "CUST007",
+                "Vikram Singh",
+                "vikram.singh@nexatel.example",
+                "+919810000007",
+                "Jaipur",
+                "CANCELLED",
+                "2024-08-14",
+            ),
+            (
+                "CUST008",
+                "Ishita Rao",
+                "ishita.rao@nexatel.example",
+                "+919810000008",
+                "Hyderabad",
+                "ACTIVE",
+                "2025-07-09",
+            ),
         ],
     )
 
@@ -72,7 +99,7 @@ def _insert_customers(connection: sqlite3.Connection) -> None:
 def _insert_plans(connection: sqlite3.Connection) -> None:
     connection.executemany(
         """
-        INSERT INTO plans (
+        INSERT OR IGNORE INTO plans (
             plan_id,
             plan_name,
             monthly_price,
@@ -129,6 +156,24 @@ def _insert_plans(connection: sqlite3.Connection) -> None:
                 0,
                 "FIBER",
             ),
+            (
+                "PLAN006",
+                "NexaMax 1499",
+                1499.00,
+                200.0,
+                5000,
+                500,
+                "MOBILE",
+            ),
+            (
+                "PLAN007",
+                "NexaFiber 1299",
+                1299.00,
+                0.0,
+                0,
+                0,
+                "FIBER",
+            ),
         ],
     )
 
@@ -136,7 +181,7 @@ def _insert_plans(connection: sqlite3.Connection) -> None:
 def _insert_subscriptions(connection: sqlite3.Connection) -> None:
     connection.executemany(
         """
-        INSERT INTO subscriptions (
+        INSERT OR IGNORE INTO subscriptions (
             subscription_id,
             customer_id,
             plan_id,
@@ -186,6 +231,30 @@ def _insert_subscriptions(connection: sqlite3.Connection) -> None:
                 "2025-02-01",
                 "ACTIVE",
                 "2026-10-01",
+            ),
+            (
+                "SUB006",
+                "CUST006",
+                "PLAN006",
+                "2025-04-01",
+                "ACTIVE",
+                "2026-10-01",
+            ),
+            (
+                "SUB007",
+                "CUST007",
+                "PLAN001",
+                "2024-08-14",
+                "CANCELLED",
+                "2025-09-14",
+            ),
+            (
+                "SUB008",
+                "CUST008",
+                "PLAN007",
+                "2025-07-09",
+                "ACTIVE",
+                "2026-10-09",
             ),
         ],
     )
@@ -446,11 +515,104 @@ def _insert_usage(connection: sqlite3.Connection) -> None:
             34,
             2,
         ),
+
+        # ------------------------------------------------------
+        # CUST006 - Premium mobile customer with high current usage
+        # ------------------------------------------------------
+        (
+            "USE027",
+            "CUST006",
+            "SUB006",
+            "2026-09-02",
+            18.5,
+            210,
+            24,
+        ),
+        (
+            "USE028",
+            "CUST006",
+            "SUB006",
+            "2026-09-12",
+            22.0,
+            265,
+            31,
+        ),
+        (
+            "USE029",
+            "CUST006",
+            "SUB006",
+            "2026-09-22",
+            20.4,
+            198,
+            27,
+        ),
+        (
+            "USE030",
+            "CUST006",
+            "SUB006",
+            "2026-08-08",
+            16.2,
+            240,
+            25,
+        ),
+        (
+            "USE031",
+            "CUST006",
+            "SUB006",
+            "2026-08-18",
+            19.1,
+            230,
+            29,
+        ),
+
+        # ------------------------------------------------------
+        # CUST007 - Cancelled account history
+        # ------------------------------------------------------
+        (
+            "USE032",
+            "CUST007",
+            "SUB007",
+            "2025-08-10",
+            3.2,
+            64,
+            5,
+        ),
+
+        # ------------------------------------------------------
+        # CUST008 - Fiber customer with no mobile usage
+        # ------------------------------------------------------
+        (
+            "USE033",
+            "CUST008",
+            "SUB008",
+            "2026-09-03",
+            8.0,
+            0,
+            0,
+        ),
+        (
+            "USE034",
+            "CUST008",
+            "SUB008",
+            "2026-09-15",
+            9.4,
+            0,
+            0,
+        ),
+        (
+            "USE035",
+            "CUST008",
+            "SUB008",
+            "2026-08-12",
+            7.7,
+            0,
+            0,
+        ),
     ]
 
     connection.executemany(
         """
-        INSERT INTO usage (
+        INSERT OR IGNORE INTO usage (
             usage_id,
             customer_id,
             subscription_id,
@@ -584,11 +746,59 @@ def _insert_bills(connection: sqlite3.Connection) -> None:
             "2026-07-01",
             "PAID",
         ),
+        # CUST006 - partially paid current bill
+        (
+            "BILL013",
+            "CUST006",
+            "2026-09-01",
+            "2026-09-30",
+            1749.00,
+            "2026-10-01",
+            "PARTIALLY_PAID",
+        ),
+        (
+            "BILL014",
+            "CUST006",
+            "2026-08-01",
+            "2026-08-31",
+            1499.00,
+            "2026-09-01",
+            "PAID",
+        ),
+        # CUST007 - final historical bill
+        (
+            "BILL015",
+            "CUST007",
+            "2025-08-01",
+            "2025-08-31",
+            499.00,
+            "2025-09-01",
+            "PAID",
+        ),
+        # CUST008 - current unpaid fiber bill
+        (
+            "BILL016",
+            "CUST008",
+            "2026-09-01",
+            "2026-09-30",
+            1342.00,
+            "2026-10-09",
+            "UNPAID",
+        ),
+        (
+            "BILL017",
+            "CUST008",
+            "2026-08-01",
+            "2026-08-31",
+            1299.00,
+            "2026-09-09",
+            "PAID",
+        ),
     ]
 
     connection.executemany(
         """
-        INSERT INTO bills (
+        INSERT OR IGNORE INTO bills (
             bill_id,
             customer_id,
             billing_period_start,
@@ -733,11 +943,70 @@ def _insert_bill_items(connection: sqlite3.Connection) -> None:
             499.00,
             "PLAN_CHARGE",
         ),
+        # CUST006
+        (
+            "ITEM018",
+            "BILL013",
+            "NexaMax 1499 monthly plan",
+            1499.00,
+            "PLAN_CHARGE",
+        ),
+        (
+            "ITEM019",
+            "BILL013",
+            "International roaming usage",
+            200.00,
+            "ROAMING",
+        ),
+        (
+            "ITEM020",
+            "BILL013",
+            "Applicable taxes",
+            50.00,
+            "TAX",
+        ),
+        (
+            "ITEM021",
+            "BILL014",
+            "NexaMax 1499 monthly plan",
+            1499.00,
+            "PLAN_CHARGE",
+        ),
+        # CUST007
+        (
+            "ITEM022",
+            "BILL015",
+            "NexaMax 499 monthly plan",
+            499.00,
+            "PLAN_CHARGE",
+        ),
+        # CUST008
+        (
+            "ITEM023",
+            "BILL016",
+            "NexaFiber 1299 monthly plan",
+            1299.00,
+            "PLAN_CHARGE",
+        ),
+        (
+            "ITEM024",
+            "BILL016",
+            "Applicable taxes",
+            43.00,
+            "TAX",
+        ),
+        (
+            "ITEM025",
+            "BILL017",
+            "NexaFiber 1299 monthly plan",
+            1299.00,
+            "PLAN_CHARGE",
+        ),
     ]
 
     connection.executemany(
         """
-        INSERT INTO bill_items (
+        INSERT OR IGNORE INTO bill_items (
             bill_item_id,
             bill_id,
             description,
@@ -881,11 +1150,54 @@ def _insert_payments(connection: sqlite3.Connection) -> None:
             "FAILED",
             "TXN-C005-0005",
         ),
+        # CUST006
+        (
+            "PAY013",
+            "BILL014",
+            "CUST006",
+            1499.00,
+            "2026-08-28T10:20:00",
+            "CREDIT_CARD",
+            "SUCCESS",
+            "TXN-C006-0001",
+        ),
+        (
+            "PAY014",
+            "BILL013",
+            "CUST006",
+            1000.00,
+            "2026-09-25T17:05:00",
+            "UPI",
+            "PENDING",
+            "TXN-C006-0002",
+        ),
+        # CUST007
+        (
+            "PAY015",
+            "BILL015",
+            "CUST007",
+            499.00,
+            "2025-08-30T13:00:00",
+            "NET_BANKING",
+            "SUCCESS",
+            "TXN-C007-0001",
+        ),
+        # CUST008
+        (
+            "PAY016",
+            "BILL017",
+            "CUST008",
+            1299.00,
+            "2026-09-07T11:45:00",
+            "DEBIT_CARD",
+            "SUCCESS",
+            "TXN-C008-0001",
+        ),
     ]
 
     connection.executemany(
         """
-        INSERT INTO payments (
+        INSERT OR IGNORE INTO payments (
             payment_id,
             bill_id,
             customer_id,
@@ -904,7 +1216,7 @@ def _insert_payments(connection: sqlite3.Connection) -> None:
 def _insert_support_tickets(connection: sqlite3.Connection) -> None:
     connection.executemany(
         """
-        INSERT INTO support_tickets (
+        INSERT OR IGNORE INTO support_tickets (
             ticket_id,
             customer_id,
             category,
@@ -967,6 +1279,36 @@ def _insert_support_tickets(connection: sqlite3.Connection) -> None:
                 "2026-07-12T11:00:00",
                 "2026-07-13T16:00:00",
             ),
+            (
+                "TICKET006",
+                "CUST006",
+                "NETWORK",
+                "Customer reported intermittent 5G connectivity while travelling.",
+                "OPEN",
+                "MEDIUM",
+                "2026-09-23T09:00:00",
+                "2026-09-23T09:00:00",
+            ),
+            (
+                "TICKET007",
+                "CUST007",
+                "OTHER",
+                "Customer requested account closure confirmation.",
+                "RESOLVED",
+                "MEDIUM",
+                "2025-09-02T10:00:00",
+                "2025-09-03T12:00:00",
+            ),
+            (
+                "TICKET008",
+                "CUST008",
+                "BROADBAND",
+                "Customer asked about a brief evening service interruption.",
+                "IN_PROGRESS",
+                "HIGH",
+                "2026-09-22T18:30:00",
+                "2026-09-23T08:15:00",
+            ),
         ],
     )
 
@@ -974,7 +1316,7 @@ def _insert_support_tickets(connection: sqlite3.Connection) -> None:
 def _insert_devices(connection: sqlite3.Connection) -> None:
     connection.executemany(
         """
-        INSERT INTO devices (
+        INSERT OR IGNORE INTO devices (
             device_id,
             customer_id,
             device_name,
@@ -1033,6 +1375,30 @@ def _insert_devices(connection: sqlite3.Connection) -> None:
                 "2025-04-01",
                 "ACTIVE",
             ),
+            (
+                "DEV007",
+                "CUST006",
+                "NexaPhone Ultra 5G",
+                "SMARTPHONE",
+                "2025-04-02",
+                "ACTIVE",
+            ),
+            (
+                "DEV008",
+                "CUST007",
+                "NexaPhone S",
+                "SMARTPHONE",
+                "2024-08-15",
+                "REPLACED",
+            ),
+            (
+                "DEV009",
+                "CUST008",
+                "NexaFiber Router Pro",
+                "ROUTER",
+                "2025-07-10",
+                "ACTIVE",
+            ),
         ],
     )
 
@@ -1072,14 +1438,6 @@ def seed_database(
         connection,
         reset=reset,
     )
-
-    # Avoid accidentally duplicating seed data.
-    existing_customer = connection.execute(
-        "SELECT 1 FROM customers LIMIT 1"
-    ).fetchone()
-
-    if existing_customer is not None:
-        return
 
     try:
         _insert_customers(connection)

@@ -1,12 +1,18 @@
 import type { ChatMessage } from "../types/chat";
 
-import { Bot } from "lucide-react";
+import { ArrowRight, Bot } from "lucide-react";
 
 interface MessageBubbleProps {
   message: ChatMessage;
+  onOptionSelect?: (message: string) => void;
+  optionsDisabled?: boolean;
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({
+  message,
+  onOptionSelect,
+  optionsDisabled = false,
+}: MessageBubbleProps) {
   const isUser = message.role === "user";
 
   return (
@@ -24,6 +30,27 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         <div className="whitespace-pre-wrap wrap-break-word text-sm leading-7">
           {message.content}
         </div>
+
+        {!isUser && message.options && message.options.length > 0 && (
+          <div className="mt-4 grid gap-2 sm:grid-cols-2">
+            {message.options.map((option) => (
+              <button
+                key={option.message}
+                type="button"
+                disabled={optionsDisabled}
+                onClick={() => onOptionSelect?.(option.message)}
+                className="group flex min-h-10 items-center justify-between gap-3 rounded-xl border border-[#b9d8d1] bg-white px-3 py-2 text-left text-xs font-bold text-[#24545a] shadow-sm transition hover:border-[#42a99d] hover:bg-[#f1faf7] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <span>{option.label}</span>
+                <ArrowRight
+                  size={15}
+                  className="shrink-0 text-[#138d80] transition-transform group-hover:translate-x-0.5"
+                  aria-hidden="true"
+                />
+              </button>
+            ))}
+          </div>
+        )}
 
         {!isUser && message.status && (
           <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#e7efed] pt-2">

@@ -69,3 +69,19 @@ For questions about topics such as weather, general trivia, unrelated products, 
 ## Current Scope
 
 NexaTel AI Support focuses on looking up account information and customer records. It does not currently change plans, make payments, open new tickets, troubleshoot network problems, or perform account actions on a customer's behalf.
+
+## Inspect the Database
+
+From the `backend` directory, run:
+
+```powershell
+python scripts/view_database.py
+```
+
+This displays every application table, its columns, row count, and complete contents. To inspect selected tables only:
+
+```powershell
+python scripts/view_database.py --table customers --table bills
+```
+
+The complete question checklist is in [QUESTIONS.md](QUESTIONS.md).

@@ -4,7 +4,15 @@ interface CustomerSelectorProps {
   disabled?: boolean;
 }
 
-const CUSTOMER_IDS = ["CUST001", "CUST002", "CUST003", "CUST004", "CUST005"];
+const CUSTOMER_IDS = [
+  "CUST001",
+  "CUST002",
+  "CUST003",
+  "CUST004",
+  "CUST005",
+  "CUST006",
+  "CUST007",
+];
 
 export function CustomerSelector({
   customerId,

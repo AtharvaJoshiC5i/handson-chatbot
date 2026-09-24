@@ -100,3 +100,21 @@ def validate_required_parameters(
             "Missing required parameter(s): "
             + ", ".join(sorted(missing))
         )
+
+
+def validate_allowed_parameters(
+    *,
+    intent_parameters: dict[str, Any],
+    allowed_parameters: set[str] | frozenset[str],
+) -> None:
+    """Reject parameters that do not belong to the selected intent."""
+
+    unexpected = sorted(
+        set(intent_parameters) - set(allowed_parameters)
+    )
+
+    if unexpected:
+        raise ValidationError(
+            "Parameter(s) not valid for this intent: "
+            + ", ".join(unexpected)
+        )

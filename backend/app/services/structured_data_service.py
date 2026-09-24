@@ -8,7 +8,8 @@ from app.intent.parameters import normalize_parameters
 from app.intent.router import IntentRouter
 from app.llm.extractor import IntentExtractor
 from app.models.domain import CustomerContext
-from app.truth.result import TruthResult
+from app.models.llm import LLMIntentResponse
+from app.truth.result import TruthResult, ambiguous_result
 
 
 class StructuredDataService:
@@ -27,7 +28,7 @@ class StructuredDataService:
         db: sqlite3.Connection,
         customer: CustomerContext,
         user_message: str,
-    ) -> tuple[object, TruthResult]:
+    ) -> tuple[LLMIntentResponse, TruthResult]:
         """Extract an intent and execute its backend handler.
 
         Returns:
@@ -38,6 +39,11 @@ class StructuredDataService:
         llm_intent = self._intent_extractor.extract(
             user_message
         )
+
+        if llm_intent.clarification:
+            return llm_intent, ambiguous_result(
+                message=llm_intent.clarification,
+            )
 
         parameters = normalize_parameters(
             llm_intent.parameters
