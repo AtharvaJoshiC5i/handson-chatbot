@@ -161,13 +161,7 @@ export default function App() {
               NexaTel AI
             </div>
 
-            <div className="hidden items-center gap-3 text-sm font-bold text-[#17313d] lg:flex">
-              <PanelLeft size={17} className="text-[#138d80]" aria-hidden="true" />
-              <span>NexaTel AI</span>
-              <span className="h-4 w-px bg-[#dfe8e5]" aria-hidden="true" />
-              <span className="text-xs font-medium text-[#7d9193]">Support workspace</span>
-              <ChevronDown size={14} className="text-[#99a9a9]" aria-hidden="true" />
-            </div>
+            
 
             <div className="flex items-center gap-3" id="customer-context">
               <div className="hidden items-center gap-1.5 rounded-full border border-[#d8e8e3] bg-[#f4faf7] px-2.5 py-1.5 text-[10px] font-semibold text-[#398070] sm:flex">
