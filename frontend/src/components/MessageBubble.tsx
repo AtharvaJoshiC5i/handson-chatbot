@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { ArrowUpRight, Check, Copy } from "lucide-react";
+
+import { Check, Copy, ArrowUpRight } from "lucide-react";
 
 import type { ChatMessage } from "../types/chat";
 
@@ -40,49 +41,68 @@ export function MessageBubble({
   onOptionSelect,
   optionsDisabled = false,
 }: MessageBubbleProps) {
+  const [copied, setCopied] = useState(false);
+
   const isUser = message.role === "user";
-  const [isCopied, setIsCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+
+      setCopied(true);
+
+      window.setTimeout(() => {
+        setCopied(false);
+      }, 1600);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   if (isUser) {
     return (
       <div className="group flex w-full justify-end">
-        <div className="relative max-w-[78%] sm:max-w-[72%]">
-          <button
-            type="button"
-            aria-label="Copy message"
-            onClick={async () => {
-              try {
-                await navigator.clipboard.writeText(message.content);
-                setIsCopied(true);
-                window.setTimeout(() => setIsCopied(false), 1200);
-              } catch {
-                setIsCopied(false);
-              }
-            }}
-            className="
-              absolute -left-10 top-1/2 -translate-y-1/2
-              flex h-7 w-7 items-center justify-center
-              rounded-md border border-[#e2e2df] bg-white text-[#555552]
-              opacity-0 shadow-sm transition-opacity duration-150
-              pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100
-              group-focus-within:pointer-events-auto group-focus-within:opacity-100
-              hover:border-[#c9c9c5] hover:text-[#292927]
-            "
-          >
-            {isCopied ? (
-              <Check size={14} strokeWidth={2} aria-hidden="true" />
-            ) : (
-              <Copy size={14} strokeWidth={2} aria-hidden="true" />
-            )}
-          </button>
-
+        <div className="max-w-[78%] sm:max-w-[72%]">
+          {/* User message */}
           <div className="rounded-[18px] bg-[#f1f1ef] px-4 py-2.5 text-[13px] leading-[1.6] text-[#292927]">
-            <p className="whitespace-pre-wrap wrap-break-word">
-              {message.content}
-            </p>
+            <p className="whitespace-pre-wrap break-words">{message.content}</p>
           </div>
-          <div className="mt-1 text-[10px] leading-4 text-[#b0b0ac] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
-            {formatTime(message.createdAt)}
+
+          {/* User message actions */}
+          <div
+            className={[
+              "mt-1.5 flex h-6 items-center justify-end gap-2",
+              "opacity-0 transition-opacity duration-150",
+              "group-hover:opacity-100",
+              "group-focus-within:opacity-100",
+            ].join(" ")}
+          >
+            <span className="text-[10px] tabular-nums text-[#aaa9a5]">
+              {formatTime(message.createdAt)}
+            </span>
+
+            <button
+              type="button"
+              onClick={handleCopy}
+              aria-label={copied ? "Message copied" : "Copy message"}
+              title={copied ? "Copied" : "Copy"}
+              className={[
+                "flex h-6 w-6 items-center justify-center rounded-md",
+                "text-[#999995]",
+                "transition-colors duration-150",
+                "hover:bg-[#f1f1ef]",
+                "hover:text-[#4f4f4b]",
+                "focus-visible:outline-none",
+                "focus-visible:ring-2",
+                "focus-visible:ring-[#b8b8b3]",
+              ].join(" ")}
+            >
+              {copied ? (
+                <Check size={13} strokeWidth={2} aria-hidden="true" />
+              ) : (
+                <Copy size={13} strokeWidth={1.8} aria-hidden="true" />
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -115,7 +135,8 @@ export function MessageBubble({
                 "hover:bg-[#f7f7f5]",
                 "hover:text-[#292927]",
                 "focus-visible:outline-none",
-                "focus-visible:ring-2 focus-visible:ring-[#b8b8b3]",
+                "focus-visible:ring-2",
+                "focus-visible:ring-[#b8b8b3]",
                 "focus-visible:ring-offset-2",
                 "disabled:pointer-events-none",
                 "disabled:opacity-40",
@@ -134,7 +155,7 @@ export function MessageBubble({
         </div>
       )}
 
-      {/* Secondary metadata */}
+      {/* Source metadata */}
       {(message.status || message.source) && (
         <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] leading-4 text-[#9a9a96]">
           {message.status && (
@@ -151,9 +172,41 @@ export function MessageBubble({
         </div>
       )}
 
-      {/* Timestamp — intentionally subtle */}
-      <div className="mt-1 text-[10px] leading-4 text-[#b0b0ac] opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100">
-        {formatTime(message.createdAt)}
+      {/* Assistant actions */}
+      <div
+        className={[
+          "mt-1.5 flex h-6 items-center gap-2",
+          "opacity-0 transition-opacity duration-150",
+          "group-hover:opacity-100",
+          "group-focus-within:opacity-100",
+        ].join(" ")}
+      >
+        <span className="text-[10px] tabular-nums text-[#aaa9a5]">
+          {formatTime(message.createdAt)}
+        </span>
+
+        <button
+          type="button"
+          onClick={handleCopy}
+          aria-label={copied ? "Response copied" : "Copy response"}
+          title={copied ? "Copied" : "Copy"}
+          className={[
+            "flex h-6 w-6 items-center justify-center rounded-md",
+            "text-[#999995]",
+            "transition-colors duration-150",
+            "hover:bg-[#f1f1ef]",
+            "hover:text-[#4f4f4b]",
+            "focus-visible:outline-none",
+            "focus-visible:ring-2",
+            "focus-visible:ring-[#b8b8b3]",
+          ].join(" ")}
+        >
+          {copied ? (
+            <Check size={13} strokeWidth={2} aria-hidden="true" />
+          ) : (
+            <Copy size={13} strokeWidth={1.8} aria-hidden="true" />
+          )}
+        </button>
       </div>
     </div>
   );

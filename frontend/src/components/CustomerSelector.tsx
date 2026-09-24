@@ -1,3 +1,5 @@
+import { ChevronDown } from "lucide-react";
+
 interface CustomerSelectorProps {
   customerId: string;
   onCustomerChange: (customerId: string) => void;
@@ -20,13 +22,27 @@ export function CustomerSelector({
   disabled = false,
 }: CustomerSelectorProps) {
   return (
-    <div>
+    <div className="relative inline-flex">
       <select
         id="customer-selector"
         value={customerId}
         onChange={(event) => onCustomerChange(event.target.value)}
         disabled={disabled}
-        className="min-w-28 rounded-xl border border-[#d2e0de] bg-white px-3 py-2 text-xs font-bold text-[#36515b] outline-none transition hover:border-[#9fcac1] focus:border-[#42a99d] focus:ring-4 focus:ring-[#c9ece5] disabled:cursor-not-allowed disabled:bg-[#f1f5f4]"
+        aria-label="Select customer"
+        className={[
+          "h-8 min-w-[104px] appearance-none rounded-lg",
+          "border border-[#e1e4e2] bg-white",
+          "pl-3 pr-8",
+          "text-[11px] font-medium text-[#3f4845]",
+          "outline-none",
+          "transition-colors duration-150",
+          "hover:border-[#cbd0cd]",
+          "focus:border-[#b7bdb9]",
+          "focus:ring-2 focus:ring-[#202725]/5",
+          "disabled:cursor-not-allowed",
+          "disabled:bg-[#f6f7f6]",
+          "disabled:text-[#9ba29f]",
+        ].join(" ")}
       >
         {CUSTOMER_IDS.map((id) => (
           <option key={id} value={id}>
@@ -34,6 +50,17 @@ export function CustomerSelector({
           </option>
         ))}
       </select>
+
+      <ChevronDown
+        size={13}
+        strokeWidth={1.8}
+        aria-hidden="true"
+        className={[
+          "pointer-events-none absolute right-2.5 top-1/2",
+          "-translate-y-1/2 text-[#858d8a]",
+          disabled ? "opacity-40" : "",
+        ].join(" ")}
+      />
     </div>
   );
 }

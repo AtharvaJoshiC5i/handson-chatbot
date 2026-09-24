@@ -14,16 +14,14 @@ from app.config.settings import Settings
 from app.llm.prompts import SYSTEM_PROMPT
 from app.models.domain import Intent, TimeRange
 from app.models.llm import LLMIntentResponse
-from app.models.llm import IntentOption, IntentParameters
+from app.models.llm import IntentParameters
 from app.utils.errors import LLMError
 
 
 COMPACT_SYSTEM_PROMPT = """
 Classify the user's NexaTel support request. Return ONLY valid JSON in this
 form: {"intent":"INTENT_NAME","parameters":{}}. For ambiguous requests,
-use intent UNSUPPORTED, add a concise "clarification" question, and
-include an "options" array of objects with short "label" and complete
-follow-up "message" values.
+use intent UNSUPPORTED and add a concise "clarification" question.
 
 Allowed intents: GET_CURRENT_PLAN, GET_ACCOUNT_STATUS, GET_PLAN_RENEWAL,
 GET_DATA_USAGE, GET_VOICE_USAGE, GET_CURRENT_BILL, GET_BILL_HISTORY,
@@ -42,11 +40,7 @@ def classify_deterministic_request(
 ) -> LLMIntentResponse | None:
     """Classify high-confidence requests without using the LLM."""
 
-    normalized = re.sub(
-        r"[.!?]+$",
-        "",
-        user_message.lower().strip(),
-    ).strip()
+    normalized = user_message.lower().strip()
     parameters = IntentParameters()
 
     if (
@@ -61,16 +55,6 @@ def classify_deterministic_request(
             clarification=(
                 "Do you mean your data usage or your voice/call-minute usage?"
             ),
-            options=[
-                IntentOption(
-                    label="Data usage",
-                    message="How much data have I used this month?",
-                ),
-                IntentOption(
-                    label="Voice usage",
-                    message="How many voice minutes have I used this month?",
-                ),
-            ],
         )
 
     if "plan" in normalized and any(
@@ -81,40 +65,6 @@ def classify_deterministic_request(
             clarification=(
                 "Do you mean your current plan or your current bill?"
             ),
-            options=[
-                IntentOption(
-                    label="Current plan",
-                    message="What is my current plan?",
-                ),
-                IntentOption(
-                    label="Current bill",
-                    message="What is my current bill?",
-                ),
-            ],
-        )
-
-    if normalized in {
-        "show me my information",
-        "show my information",
-        "what are my latest details",
-        "what are my details",
-        "what happened with my account",
-    }:
-        return LLMIntentResponse(
-            intent=Intent.UNSUPPORTED,
-            clarification=(
-                "What would you like to know: your account, plan, usage, "
-                "billing, payment, support tickets, or devices?"
-            ),
-            options=[
-                IntentOption(label="Account status", message="What is my account status?"),
-                IntentOption(label="Current plan", message="What is my current plan?"),
-                IntentOption(label="Usage", message="How much data have I used this month?"),
-                IntentOption(label="Current bill", message="What is my current bill?"),
-                IntentOption(label="Payment status", message="What is the status of my latest payment?"),
-                IntentOption(label="Support tickets", message="What support tickets do I have?"),
-                IntentOption(label="Devices", message="What devices are on my account?"),
-            ],
         )
 
     limit_match = re.search(r"\b(?:last|first|top)\s+(\d+)\b", normalized)
@@ -143,15 +93,7 @@ def classify_deterministic_request(
             )
             else Intent.GET_PAYMENT_HISTORY
         )
-    elif (
-        "compare" in normalized
-        or "comparison" in normalized
-        or (
-            "bill" in normalized
-            and "different" in normalized
-            and "last" in normalized
-        )
-    ):
+    elif "compare" in normalized or "comparison" in normalized:
         intent = Intent.GET_BILL_COMPARISON
     elif (
         "support" in normalized

@@ -1,5 +1,7 @@
 import { useEffect, useRef } from "react";
 
+import { Bot } from "lucide-react";
+
 import type { ChatMessage } from "../types/chat";
 
 import { MessageBubble } from "./MessageBubble";
@@ -7,62 +9,39 @@ import { MessageBubble } from "./MessageBubble";
 interface ChatWindowProps {
   messages: ChatMessage[];
   loading?: boolean;
-  onOptionSelect?: (message: string) => void;
 }
 
-export function ChatWindow({
-  messages,
-  loading = false,
-  onOptionSelect,
-}: ChatWindowProps) {
+export function ChatWindow({ messages, loading = false }: ChatWindowProps) {
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  const hasRenderedMessages = useRef(false);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
-      behavior: hasRenderedMessages.current ? "smooth" : "auto",
-      block: "end",
+      behavior: "smooth",
     });
-
-    hasRenderedMessages.current = true;
-  }, [messages.length, loading]);
+  }, [messages, loading]);
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-      <div className="mx-auto w-full max-w-[680px] px-4 pb-8 pt-6 sm:px-6">
-        <div className="flex flex-col gap-7 sm:gap-8">
-          {messages.map((message) => (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              onOptionSelect={onOptionSelect}
-              optionsDisabled={loading}
-            />
-          ))}
+    <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-5 sm:px-8 sm:py-6">
+      <div className="mx-auto flex w-full max-w-190 flex-col gap-7">
+        {messages.map((message) => (
+          <MessageBubble key={message.id} message={message} />
+        ))}
 
-          {loading && (
-            <div
-              role="status"
-              aria-live="polite"
-              aria-label="Assistant is responding"
-              className="flex min-h-6 items-center"
-            >
-              <div className="flex items-center gap-1.5" aria-hidden="true">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#a6a6a2]" />
-
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#a6a6a2] [animation-delay:150ms]" />
-
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#a6a6a2] [animation-delay:300ms]" />
-              </div>
+        {loading && (
+          <div className="flex items-start gap-3">
+            <div className="grid size-8 shrink-0 place-items-center rounded-xl bg-[#123442] text-sm text-white shadow-sm shadow-[#123442]/20">
+              <Bot size={16} strokeWidth={2.2} aria-hidden="true" />
             </div>
-          )}
+            <div className="pt-1 text-sm leading-7 text-[#71858a]">
+              NexaTel AI is thinking{" "}
+              <span className="animate-pulse tracking-[0.18em] text-[#138d80]">
+                •••
+              </span>
+            </div>
+          </div>
+        )}
 
-          <div
-            ref={bottomRef}
-            aria-hidden="true"
-            className="h-px"
-          />
-        </div>
+        <div ref={bottomRef} />
       </div>
     </div>
   );
