@@ -92,3 +92,26 @@ def test_chat_stream_sends_metadata_then_generated_text_deltas(
         app.dependency_overrides.clear()
         app.dependency_overrides.update(original_overrides)
         db.close()
+
+
+def test_customer_profile_returns_name_from_selected_account() -> None:
+    db = sqlite3.connect(":memory:", check_same_thread=False)
+    db.row_factory = sqlite3.Row
+    db.execute("PRAGMA foreign_keys = ON")
+    seed_database(db, reset=True)
+    original_overrides = app.dependency_overrides.copy()
+    app.dependency_overrides[chat_route.get_db] = lambda: db
+
+    try:
+        with TestClient(app) as client:
+            response = client.get(
+                "/api/chat/profile",
+                headers={"X-Customer-ID": "CUST001"},
+            )
+
+        assert response.status_code == 200
+        assert response.json() == {"name": "Aarav Sharma"}
+    finally:
+        app.dependency_overrides.clear()
+        app.dependency_overrides.update(original_overrides)
+        db.close()

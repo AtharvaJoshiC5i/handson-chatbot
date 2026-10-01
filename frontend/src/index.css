@@ -92,3 +92,45 @@ button:disabled {
   background: var(--color-canvas);
   letter-spacing: 0;
 }
+
+@media (max-height: 620px) and (max-width: 639px) {
+  .welcome-panel {
+    padding-block: 6px;
+  }
+
+  .welcome-section {
+    padding-block: 0;
+  }
+
+  .welcome-identity {
+    margin-bottom: 8px;
+  }
+
+  .welcome-heading {
+    font-size: 27px;
+    line-height: 1.1;
+  }
+
+  .welcome-description {
+    margin-top: 5px;
+    font-size: 12px;
+    line-height: 1.35;
+  }
+
+  .welcome-topics {
+    margin-top: 12px;
+  }
+
+  .welcome-topics-label {
+    margin-bottom: 5px;
+  }
+
+  .welcome-topic-grid {
+    gap: 5px;
+  }
+
+  .welcome-topic-card {
+    min-height: 52px;
+    padding-block: 5px;
+  }
+}

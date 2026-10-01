@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   ArrowUpRight,
@@ -18,6 +18,7 @@ import { ChatWindow } from "./components/ChatWindow";
 import { CustomerSelector } from "./components/CustomerSelector";
 import { MessageInput } from "./components/MessageInput";
 import {
+  getCustomerName,
   resetConversationContext,
   streamChatMessage,
 } from "./services/api";
@@ -103,6 +104,32 @@ export default function App() {
   >(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [customerProfile, setCustomerProfile] = useState<{
+    customerId: string;
+    name: string;
+  } | null>(null);
+  const customerName =
+    customerProfile?.customerId === customerId
+      ? customerProfile.name
+      : null;
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    void getCustomerName(customerId, controller.signal)
+      .then((name) => setCustomerProfile({ customerId, name }))
+      .catch((profileError: unknown) => {
+        if (
+          profileError instanceof DOMException &&
+          profileError.name === "AbortError"
+        ) {
+          return;
+        }
+
+      });
+
+    return () => controller.abort();
+  }, [customerId]);
 
   const hasConversation =
     messages.length > 0;
@@ -359,7 +386,7 @@ export default function App() {
                 Selected account
               </span>
               <span className="mt-0.5 block truncate text-[11px] font-semibold tabular-nums text-[#2c4336]">
-                {customerId}
+                {customerName ? `${customerName}` : `${customerId}`}
               </span>
             </div>
           </div>
@@ -416,34 +443,34 @@ export default function App() {
         >
           <div className="mx-auto flex h-full w-full max-w-[920px] flex-col">
             {!hasConversation ? (
-              <div className="flex min-h-0 flex-1 flex-col justify-center overflow-y-auto px-5 pb-6 pt-8 sm:px-9 lg:px-12">
-                <section className="mx-auto w-full max-w-[740px] py-6">
-                  <div className="mb-6 flex items-center gap-3">
+              <div className="welcome-panel flex min-h-0 flex-1 flex-col justify-center overflow-hidden px-5 py-3 sm:px-9 lg:px-12">
+                <section className="welcome-section mx-auto w-full max-w-[740px] py-2">
+                  <div className="welcome-identity mb-4 flex items-center gap-3">
                     <span className="grid size-11 place-items-center rounded-xl bg-[#173c32] text-[#f0d69a]">
                       <Headphones size={20} strokeWidth={1.8} aria-hidden="true" />
                     </span>
-                    <div>
-                      <p className="text-[9px] font-semibold text-[#84938a]">
-                        NEXATEL CUSTOMER CARE
+                    <div className="min-w-0">
+                      <p className="truncate text-[12px] font-semibold text-[#526f5c]">
+                        {customerName ? `Welcome, ${customerName}` : `Welcome, ${customerId}`}
                       </p>
-                      <p className="mt-1 text-[11px] font-medium tabular-nums text-[#3f574b]">
-                        Account {customerId}
+                      <p className="mt-0.5 text-[10px] text-[#84938a]">
+                        NexaTel customer care
                       </p>
                     </div>
                   </div>
-                  <h1 className="max-w-[600px] text-[32px] font-semibold leading-[1.15] text-[#1c342b] sm:text-[40px]">
-                    How can we help you today?
+                  <h1 className="welcome-heading max-w-[600px] text-[30px] font-semibold leading-[1.15] text-[#1c342b] sm:text-[38px]">
+                    How can I help you today?
                   </h1>
-                  <p className="mt-3 max-w-[500px] text-[14px] leading-6 text-[#74837a]">
+                  <p className="welcome-description mt-2 max-w-[500px] text-[14px] leading-6 text-[#74837a]">
                     Get clear answers about your plan, data, bills, and payments.
                   </p>
 
-                  <div className="mt-9">
-                    <p className="mb-3 text-[9px] font-semibold text-[#86938b]">
+                  <div className="welcome-topics mt-6">
+                    <p className="welcome-topics-label mb-2 text-[9px] font-semibold text-[#86938b]">
                       POPULAR TOPICS
                     </p>
                     <div
-                      className="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3"
+                      className="welcome-topic-grid grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3"
                       aria-label="Suggested questions"
                     >
                       {starterPrompts.map((item) => {
@@ -456,7 +483,8 @@ export default function App() {
                             onClick={() => handleSend(item.prompt)}
                             disabled={loading}
                             className={[
-                              "group flex min-h-[82px] items-center gap-3 rounded-md border border-[#e1e8e2] bg-white px-3.5 py-3 text-left",
+                              "group flex min-h-[74px] items-center gap-3 rounded-md border border-[#e1e8e2] bg-white px-3.5 py-2.5 text-left",
+                              "welcome-topic-card",
                               "transition duration-150 hover:border-[#b6c9bb] hover:bg-[#fcfdfb] hover:shadow-[0_5px_16px_rgba(28,52,43,0.06)]",
                               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#41705d] focus-visible:ring-offset-2",
                               "disabled:pointer-events-none disabled:opacity-40",

@@ -645,6 +645,54 @@ export async function checkBackendHealth(): Promise<boolean> {
   }
 }
 
+export async function getCustomerName(
+  customerId: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}/chat/profile`, {
+      headers: {
+        "X-Customer-ID": customerId,
+      },
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw error;
+    }
+
+    throw new ApiError(
+      "The NexaTel backend is unavailable. Make sure it is running on port 8001.",
+      0,
+    );
+  }
+
+  let responseBody: unknown = null;
+  try {
+    responseBody = await response.json();
+  } catch {
+    // Leave the response invalid so it is reported below.
+  }
+
+  if (!response.ok) {
+    throw new ApiError(
+      getErrorMessage(responseBody, response.status),
+      response.status,
+    );
+  }
+
+  if (!isRecord(responseBody) || !isString(responseBody.name)) {
+    throw new ApiError(
+      "The backend returned an invalid customer profile.",
+      response.status,
+    );
+  }
+
+  return responseBody.name;
+}
+
 export async function streamChatMessage(
   customerId: string,
   message: string,

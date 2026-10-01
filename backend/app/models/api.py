@@ -35,6 +35,14 @@ class ConversationResetRequest(BaseModel):
     )
 
 
+class CustomerProfileResponse(BaseModel):
+    """Minimal profile data for the authenticated selected customer."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+
+
 class ChatOption(BaseModel):
     """Selectable follow-up question."""
 

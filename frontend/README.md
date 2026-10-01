@@ -17,59 +17,39 @@ If you are developing a production application, we recommend updating the config
 
 ```js
 export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+  # NexaTel AI Support Frontend
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+  React, TypeScript, Vite, and Tailwind frontend for the NexaTel customer-support chat.
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+  The UI provides customer selection, the personalized welcome page, suggested questions, streaming assistant messages, Markdown/GFM formatting, structured answer details, and lazy-loaded usage/billing charts. The backend owns customer data access and calculations; the frontend renders the response and does not calculate account values.
 
-```
+  For architecture, API behavior, backend setup, supported questions, and safety notes, see the [project README](../README.md) and [question guide](../QUESTIONS.md).
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+  ## Local Development
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+  Run the backend on port 8001 first. From this directory:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+  ```powershell
+  npm install
+  npm run dev
+  ```
 
-```
+  Open `http://localhost:5173`. The Vite development server proxies `/api` and `/health` to `http://127.0.0.1:8001`.
+
+  ## Checks
+
+  ```powershell
+  npm run lint
+  npm run build
+  ```
+
+  ## Main Components
+
+  - `src/App.tsx`: application shell, selected-customer profile, and streamed chat state.
+  - `src/components/MessageBubble.tsx`: user and assistant message rendering with Markdown.
+  - `src/components/StructuredPresentation.tsx`: structured result layouts and lazy chart loading.
+  - `src/components/TimeSeriesChart.tsx`: numeric usage/billing visualizations and exact-value rows.
+  - `src/services/api.ts`: profile, chat SSE, reset, and response parsing.
+
+For the full system setup and API contract, see the [project README](../README.md).
+

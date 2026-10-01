@@ -20,10 +20,12 @@ from app.config.settings import (
     get_settings,
 )
 from app.database.connection import get_db
+from app.database.queries.customers import get_customer
 from app.llm.client import GroqLLMClient
 from app.models.api import (
     ChatRequest,
     ChatResponse,
+    CustomerProfileResponse,
     ConversationResetRequest,
 )
 from app.models.domain import CustomerContext
@@ -73,6 +75,42 @@ def get_customer_context(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid customer ID.",
         ) from exc
+
+
+@router.get(
+    "/profile",
+    response_model=CustomerProfileResponse,
+)
+def get_selected_customer_profile(
+    customer: CustomerContext = Depends(
+        get_customer_context
+    ),
+    db: sqlite3.Connection = Depends(
+        get_db
+    ),
+) -> CustomerProfileResponse:
+    """Return only the authenticated selected customer's display name."""
+
+    try:
+        row = get_customer(
+            db,
+            customer_id=customer.customer_id,
+        )
+    except sqlite3.Error as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Customer profile is unavailable.",
+        ) from exc
+
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Customer account was not found.",
+        )
+
+    return CustomerProfileResponse(
+        name=row["name"],
+    )
 
 
 @router.post(
