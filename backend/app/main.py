@@ -14,7 +14,7 @@ settings = get_settings()
 app = FastAPI(
     title="NexaTel AI Customer Support",
     description=(
-        "Phase 1 structured-data customer support API "
+        "Structured-data AI customer support API "
         "for NexaTel."
     ),
     version="0.1.0",
@@ -26,4 +26,5 @@ app.include_router(
 
 app.include_router(
     chat_router,
+    prefix="/api",
 )

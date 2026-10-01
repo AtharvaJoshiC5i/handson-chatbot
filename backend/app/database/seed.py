@@ -1,1469 +1,992 @@
+from __future__ import annotations
+
+from calendar import monthrange
+from datetime import date, timedelta
 from pathlib import Path
 import sqlite3
 
-
 SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
+MONTHS = [(2026, m) for m in range(4, 10)]
 
+# Intentional manager-demo fixtures:
+# CUST002: roaming bill increase + failed payment + billing ticket.
+# CUST006: heavy mobile usage approaching allowance.
+# CUST004: overdue/payment problem on a suspended account.
+# CUST005: stable customer; BILL009/BILL010 retained for existing tests/evaluation.
+# CUST003: unlimited fiber customer with router and broadband support history.
 
-def _insert_customers(connection: sqlite3.Connection) -> None:
-    connection.executemany(
-        """
-        INSERT OR IGNORE INTO customers (
-            customer_id,
-            name,
-            email,
-            phone_number,
-            city,
-            account_status,
-            registration_date
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        [
-            (
-                "CUST001",
-                "Aarav Sharma",
-                "aarav.sharma@nexatel.example",
-                "+919810000001",
-                "Mumbai",
-                "ACTIVE",
-                "2024-02-15",
-            ),
-            (
-                "CUST002",
-                "Diya Mehta",
-                "diya.mehta@nexatel.example",
-                "+919810000002",
-                "Pune",
-                "ACTIVE",
-                "2024-06-20",
-            ),
-            (
-                "CUST003",
-                "Rohan Kapoor",
-                "rohan.kapoor@nexatel.example",
-                "+919810000003",
-                "Bengaluru",
-                "ACTIVE",
-                "2023-11-10",
-            ),
-            (
-                "CUST004",
-                "Ananya Iyer",
-                "ananya.iyer@nexatel.example",
-                "+919810000004",
-                "Delhi",
-                "SUSPENDED",
-                "2023-05-03",
-            ),
-            (
-                "CUST005",
-                "Kabir Patel",
-                "kabir.patel@nexatel.example",
-                "+919810000005",
-                "Ahmedabad",
-                "ACTIVE",
-                "2025-01-18",
-            ),
-            (
-                "CUST006",
-                "Meera Nair",
-                "meera.nair@nexatel.example",
-                "+919810000006",
-                "Chennai",
-                "ACTIVE",
-                "2025-03-22",
-            ),
-            (
-                "CUST007",
-                "Vikram Singh",
-                "vikram.singh@nexatel.example",
-                "+919810000007",
-                "Jaipur",
-                "CANCELLED",
-                "2024-08-14",
-            ),
-            (
-                "CUST008",
-                "Ishita Rao",
-                "ishita.rao@nexatel.example",
-                "+919810000008",
-                "Hyderabad",
-                "ACTIVE",
-                "2025-07-09",
-            ),
-        ],
-    )
+CUSTOMERS = [
+    (
+        "CUST001",
+        "Aarav Sharma",
+        "aarav.sharma@example.com",
+        "+919000000001",
+        "Mumbai",
+        "ACTIVE",
+        "2024-02-15",
+    ),
+    (
+        "CUST002",
+        "Diya Mehta",
+        "diya.mehta@example.com",
+        "+919000000002",
+        "Pune",
+        "ACTIVE",
+        "2024-06-20",
+    ),
+    (
+        "CUST003",
+        "Rohan Kapoor",
+        "rohan.kapoor@example.com",
+        "+919000000003",
+        "Bengaluru",
+        "ACTIVE",
+        "2023-11-10",
+    ),
+    (
+        "CUST004",
+        "Ananya Iyer",
+        "ananya.iyer@example.com",
+        "+919000000004",
+        "Delhi",
+        "SUSPENDED",
+        "2023-05-03",
+    ),
+    (
+        "CUST005",
+        "Kabir Patel",
+        "kabir.patel@example.com",
+        "+919000000005",
+        "Ahmedabad",
+        "ACTIVE",
+        "2025-01-18",
+    ),
+    (
+        "CUST006",
+        "Meera Nair",
+        "meera.nair@example.com",
+        "+919000000006",
+        "Chennai",
+        "ACTIVE",
+        "2025-03-22",
+    ),
+    (
+        "CUST007",
+        "Vikram Singh",
+        "vikram.singh@example.com",
+        "+919000000007",
+        "Jaipur",
+        "CANCELLED",
+        "2024-08-14",
+    ),
+    (
+        "CUST008",
+        "Ishita Rao",
+        "ishita.rao@example.com",
+        "+919000000008",
+        "Hyderabad",
+        "ACTIVE",
+        "2025-07-09",
+    ),
+    (
+        "CUST009",
+        "Arjun Reddy",
+        "arjun.reddy@example.com",
+        "+919000000009",
+        "Hyderabad",
+        "ACTIVE",
+        "2024-09-12",
+    ),
+    (
+        "CUST010",
+        "Sneha Banerjee",
+        "sneha.banerjee@example.com",
+        "+919000000010",
+        "Kolkata",
+        "ACTIVE",
+        "2025-02-03",
+    ),
+    (
+        "CUST011",
+        "Aditya Deshmukh",
+        "aditya.deshmukh@example.com",
+        "+919000000011",
+        "Pune",
+        "ACTIVE",
+        "2024-12-18",
+    ),
+    (
+        "CUST012",
+        "Nandini Menon",
+        "nandini.menon@example.com",
+        "+919000000012",
+        "Kochi",
+        "ACTIVE",
+        "2023-08-27",
+    ),
+    (
+        "CUST013",
+        "Harpreet Kaur",
+        "harpreet.kaur@example.com",
+        "+919000000013",
+        "Chandigarh",
+        "ACTIVE",
+        "2025-05-11",
+    ),
+    (
+        "CUST014",
+        "Siddharth Verma",
+        "siddharth.verma@example.com",
+        "+919000000014",
+        "Lucknow",
+        "ACTIVE",
+        "2024-04-06",
+    ),
+    (
+        "CUST015",
+        "Priya Kulkarni",
+        "priya.kulkarni@example.com",
+        "+919000000015",
+        "Indore",
+        "SUSPENDED",
+        "2024-10-19",
+    ),
+    (
+        "CUST016",
+        "Debashish Mohanty",
+        "debashish.mohanty@example.com",
+        "+919000000016",
+        "Bhubaneswar",
+        "ACTIVE",
+        "2025-06-02",
+    ),
+    (
+        "CUST017",
+        "Neha Malhotra",
+        "neha.malhotra@example.com",
+        "+919000000017",
+        "Gurugram",
+        "ACTIVE",
+        "2023-12-09",
+    ),
+    (
+        "CUST018",
+        "Karthik Subramanian",
+        "karthik.subramanian@example.com",
+        "+919000000018",
+        "Chennai",
+        "ACTIVE",
+        "2024-07-21",
+    ),
+    (
+        "CUST019",
+        "Aditi Joshi",
+        "aditi.joshi@example.com",
+        "+919000000019",
+        "Mumbai",
+        "CANCELLED",
+        "2023-09-14",
+    ),
+    (
+        "CUST020",
+        "Rahul Chatterjee",
+        "rahul.chatterjee@example.com",
+        "+919000000020",
+        "Kolkata",
+        "ACTIVE",
+        "2025-01-30",
+    ),
+]
 
+PLANS = [
+    ("PLAN001", "NexaMax 499", 499, 50, 0, 1200, 100, "MOBILE"),
+    ("PLAN002", "NexaMax 799", 799, 75, 0, 2000, 200, "MOBILE"),
+    ("PLAN003", "NexaMax 999", 999, 100, 0, 3000, 300, "MOBILE"),
+    ("PLAN004", "NexaMax 1499", 1499, 150, 0, 5000, 500, "MOBILE"),
+    ("PLAN005", "NexaFiber 799", 799, 0, 1, 0, 0, "FIBER"),
+    ("PLAN006", "NexaFiber 999", 999, 0, 1, 0, 0, "FIBER"),
+    ("PLAN007", "NexaFiber 1499", 1499, 0, 1, 0, 0, "FIBER"),
+    ("PLAN008", "NexaMax 649", 649, 60, 0, 1500, 150, "MOBILE"),
+]
 
-def _insert_plans(connection: sqlite3.Connection) -> None:
-    connection.executemany(
-        """
-        INSERT OR IGNORE INTO plans (
-            plan_id,
-            plan_name,
-            monthly_price,
-            data_limit_gb,
-            voice_limit_minutes,
-            sms_limit,
-            plan_type
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        [
-            (
-                "PLAN001",
-                "NexaMax 499",
-                499.00,
-                40.0,
-                1000,
-                100,
-                "MOBILE",
-            ),
-            (
-                "PLAN002",
-                "NexaMax 799",
-                799.00,
-                75.0,
-                2000,
-                200,
-                "MOBILE",
-            ),
-            (
-                "PLAN003",
-                "NexaMax 999",
-                999.00,
-                100.0,
-                3000,
-                300,
-                "MOBILE",
-            ),
-            (
-                "PLAN004",
-                "NexaFiber 699",
-                699.00,
-                0.0,
-                0,
-                0,
-                "FIBER",
-            ),
-            (
-                "PLAN005",
-                "NexaFiber 999",
-                999.00,
-                0.0,
-                0,
-                0,
-                "FIBER",
-            ),
-            (
-                "PLAN006",
-                "NexaMax 1499",
-                1499.00,
-                200.0,
-                5000,
-                500,
-                "MOBILE",
-            ),
-            (
-                "PLAN007",
-                "NexaFiber 1299",
-                1299.00,
-                0.0,
-                0,
-                0,
-                "FIBER",
-            ),
-        ],
-    )
+PLAN_BY_ID = {plan[0]: plan for plan in PLANS}
 
+ASSIGN = [
+    "PLAN002",
+    "PLAN002",
+    "PLAN005",
+    "PLAN003",
+    "PLAN001",
+    "PLAN003",
+    "PLAN001",
+    "PLAN007",
+    "PLAN008",
+    "PLAN002",
+    "PLAN001",
+    "PLAN006",
+    "PLAN002",
+    "PLAN003",
+    "PLAN001",
+    "PLAN005",
+    "PLAN004",
+    "PLAN002",
+    "PLAN001",
+    "PLAN006",
+]
 
-def _insert_subscriptions(connection: sqlite3.Connection) -> None:
-    connection.executemany(
-        """
-        INSERT OR IGNORE INTO subscriptions (
-            subscription_id,
-            customer_id,
-            plan_id,
-            activation_date,
-            status,
-            renewal_date
-        )
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        [
-            (
-                "SUB001",
-                "CUST001",
-                "PLAN002",
-                "2025-08-10",
-                "ACTIVE",
-                "2026-10-10",
-            ),
-            (
-                "SUB002",
-                "CUST002",
-                "PLAN002",
-                "2025-11-05",
-                "ACTIVE",
-                "2026-10-05",
-            ),
-            (
-                "SUB003",
-                "CUST003",
-                "PLAN005",
-                "2024-12-01",
-                "ACTIVE",
-                "2026-10-01",
-            ),
-            (
-                "SUB004",
-                "CUST004",
-                "PLAN003",
-                "2024-01-15",
-                "SUSPENDED",
-                "2026-10-15",
-            ),
-            (
-                "SUB005",
-                "CUST005",
-                "PLAN001",
-                "2025-02-01",
-                "ACTIVE",
-                "2026-10-01",
-            ),
-            (
-                "SUB006",
-                "CUST006",
-                "PLAN006",
-                "2025-04-01",
-                "ACTIVE",
-                "2026-10-01",
-            ),
-            (
-                "SUB007",
-                "CUST007",
-                "PLAN001",
-                "2024-08-14",
-                "CANCELLED",
-                "2025-09-14",
-            ),
-            (
-                "SUB008",
-                "CUST008",
-                "PLAN007",
-                "2025-07-09",
-                "ACTIVE",
-                "2026-10-09",
-            ),
-        ],
-    )
+PATTERNS = [
+    "stable",
+    "rising",
+    "fiber",
+    "stable",
+    "low",
+    "heavy",
+    "cancelled",
+    "fiber",
+    "rising",
+    "spike",
+    "low",
+    "fiber",
+    "stable",
+    "rising",
+    "stable",
+    "fiber",
+    "heavy",
+    "declining",
+    "cancelled",
+    "fiber",
+]
 
-
-def _insert_usage(connection: sqlite3.Connection) -> None:
-    usage_rows = [
-        # ------------------------------------------------------
-        # CUST001 - Normal usage
-        # ------------------------------------------------------
-        (
-            "USE001",
-            "CUST001",
-            "SUB001",
-            "2026-09-01",
-            1.8,
-            42,
-            4,
-        ),
-        (
-            "USE002",
-            "CUST001",
-            "SUB001",
-            "2026-09-05",
-            2.1,
-            55,
-            7,
-        ),
-        (
-            "USE003",
-            "CUST001",
-            "SUB001",
-            "2026-09-10",
-            1.4,
-            38,
-            3,
-        ),
-        (
-            "USE004",
-            "CUST001",
-            "SUB001",
-            "2026-09-15",
-            2.7,
-            62,
-            6,
-        ),
-        (
-            "USE005",
-            "CUST001",
-            "SUB001",
-            "2026-09-20",
-            3.2,
-            71,
-            5,
-        ),
-        (
-            "USE006",
-            "CUST001",
-            "SUB001",
-            "2026-08-05",
-            2.0,
-            44,
-            4,
-        ),
-        (
-            "USE007",
-            "CUST001",
-            "SUB001",
-            "2026-08-12",
-            1.7,
-            51,
-            5,
-        ),
-        (
-            "USE008",
-            "CUST001",
-            "SUB001",
-            "2026-08-20",
-            2.4,
-            48,
-            6,
-        ),
-
-        # ------------------------------------------------------
-        # CUST002 - High usage
-        # ------------------------------------------------------
-        (
-            "USE009",
-            "CUST002",
-            "SUB002",
-            "2026-09-01",
-            6.5,
-            85,
-            8,
-        ),
-        (
-            "USE010",
-            "CUST002",
-            "SUB002",
-            "2026-09-04",
-            7.2,
-            91,
-            9,
-        ),
-        (
-            "USE011",
-            "CUST002",
-            "SUB002",
-            "2026-09-08",
-            8.1,
-            73,
-            7,
-        ),
-        (
-            "USE012",
-            "CUST002",
-            "SUB002",
-            "2026-09-12",
-            6.8,
-            88,
-            11,
-        ),
-        (
-            "USE013",
-            "CUST002",
-            "SUB002",
-            "2026-09-16",
-            7.9,
-            96,
-            10,
-        ),
-        (
-            "USE014",
-            "CUST002",
-            "SUB002",
-            "2026-09-20",
-            9.3,
-            105,
-            12,
-        ),
-        (
-            "USE015",
-            "CUST002",
-            "SUB002",
-            "2026-08-05",
-            5.8,
-            70,
-            8,
-        ),
-        (
-            "USE016",
-            "CUST002",
-            "SUB002",
-            "2026-08-15",
-            6.4,
-            76,
-            9,
-        ),
-
-        # ------------------------------------------------------
-        # CUST003 - Fiber customer
-        # ------------------------------------------------------
-        (
-            "USE017",
-            "CUST003",
-            "SUB003",
-            "2026-09-01",
-            3.4,
-            0,
-            0,
-        ),
-        (
-            "USE018",
-            "CUST003",
-            "SUB003",
-            "2026-09-10",
-            4.1,
-            0,
-            0,
-        ),
-        (
-            "USE019",
-            "CUST003",
-            "SUB003",
-            "2026-09-20",
-            5.0,
-            0,
-            0,
-        ),
-
-        # ------------------------------------------------------
-        # CUST004 - Suspended customer
-        # ------------------------------------------------------
-        (
-            "USE020",
-            "CUST004",
-            "SUB004",
-            "2026-08-01",
-            4.8,
-            82,
-            7,
-        ),
-        (
-            "USE021",
-            "CUST004",
-            "SUB004",
-            "2026-08-10",
-            5.1,
-            90,
-            8,
-        ),
-
-        # ------------------------------------------------------
-        # CUST005 - Multiple-history customer
-        # ------------------------------------------------------
-        (
-            "USE022",
-            "CUST005",
-            "SUB005",
-            "2026-09-03",
-            1.2,
-            31,
-            2,
-        ),
-        (
-            "USE023",
-            "CUST005",
-            "SUB005",
-            "2026-09-09",
-            1.8,
-            45,
-            4,
-        ),
-        (
-            "USE024",
-            "CUST005",
-            "SUB005",
-            "2026-09-17",
-            2.1,
-            52,
-            5,
-        ),
-        (
-            "USE025",
-            "CUST005",
-            "SUB005",
-            "2026-08-03",
-            1.5,
-            39,
-            3,
-        ),
-        (
-            "USE026",
-            "CUST005",
-            "SUB005",
-            "2026-07-08",
-            1.1,
-            34,
-            2,
-        ),
-
-        # ------------------------------------------------------
-        # CUST006 - Premium mobile customer with high current usage
-        # ------------------------------------------------------
-        (
-            "USE027",
-            "CUST006",
-            "SUB006",
-            "2026-09-02",
-            18.5,
-            210,
-            24,
-        ),
-        (
-            "USE028",
-            "CUST006",
-            "SUB006",
-            "2026-09-12",
-            22.0,
-            265,
-            31,
-        ),
-        (
-            "USE029",
-            "CUST006",
-            "SUB006",
-            "2026-09-22",
-            20.4,
-            198,
-            27,
-        ),
-        (
-            "USE030",
-            "CUST006",
-            "SUB006",
-            "2026-08-08",
-            16.2,
-            240,
-            25,
-        ),
-        (
-            "USE031",
-            "CUST006",
-            "SUB006",
-            "2026-08-18",
-            19.1,
-            230,
-            29,
-        ),
-
-        # ------------------------------------------------------
-        # CUST007 - Cancelled account history
-        # ------------------------------------------------------
-        (
-            "USE032",
-            "CUST007",
-            "SUB007",
-            "2025-08-10",
-            3.2,
-            64,
-            5,
-        ),
-
-        # ------------------------------------------------------
-        # CUST008 - Fiber customer with no mobile usage
-        # ------------------------------------------------------
-        (
-            "USE033",
-            "CUST008",
-            "SUB008",
-            "2026-09-03",
-            8.0,
-            0,
-            0,
-        ),
-        (
-            "USE034",
-            "CUST008",
-            "SUB008",
-            "2026-09-15",
-            9.4,
-            0,
-            0,
-        ),
-        (
-            "USE035",
-            "CUST008",
-            "SUB008",
-            "2026-08-12",
-            7.7,
-            0,
-            0,
-        ),
-    ]
-
-    connection.executemany(
-        """
-        INSERT OR IGNORE INTO usage (
-            usage_id,
-            customer_id,
-            subscription_id,
-            usage_date,
-            data_used_gb,
-            voice_minutes,
-            sms_count
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        usage_rows,
-    )
-
-
-def _insert_bills(connection: sqlite3.Connection) -> None:
-    bills = [
-        # CUST001 - paid current bill
-        (
-            "BILL001",
-            "CUST001",
-            "2026-09-01",
-            "2026-09-30",
-            799.00,
-            "2026-10-05",
-            "PAID",
-        ),
-        (
-            "BILL002",
-            "CUST001",
-            "2026-08-01",
-            "2026-08-31",
-            799.00,
-            "2026-09-05",
-            "PAID",
-        ),
-
-        # CUST002 - unpaid current bill with roaming
-        (
-            "BILL003",
-            "CUST002",
-            "2026-09-01",
-            "2026-09-30",
-            1143.00,
-            "2026-09-25",
-            "UNPAID",
-        ),
-        (
-            "BILL004",
-            "CUST002",
-            "2026-08-01",
-            "2026-08-31",
-            799.00,
-            "2026-09-05",
-            "PAID",
-        ),
-
-        # CUST003 - fiber bill
-        (
-            "BILL005",
-            "CUST003",
-            "2026-09-01",
-            "2026-09-30",
-            1042.00,
-            "2026-10-01",
-            "UNPAID",
-        ),
-        (
-            "BILL006",
-            "CUST003",
-            "2026-08-01",
-            "2026-08-31",
-            999.00,
-            "2026-09-01",
-            "PAID",
-        ),
-
-        # CUST004 - overdue
-        (
-            "BILL007",
-            "CUST004",
-            "2026-08-01",
-            "2026-08-31",
-            1199.00,
-            "2026-08-20",
-            "OVERDUE",
-        ),
-        (
-            "BILL008",
-            "CUST004",
-            "2026-07-01",
-            "2026-07-31",
-            999.00,
-            "2026-08-05",
-            "PAID",
-        ),
-
-        # CUST005 - multiple history records
-        (
-            "BILL009",
-            "CUST005",
-            "2026-09-01",
-            "2026-09-30",
-            499.00,
-            "2026-10-01",
-            "PAID",
-        ),
-        (
-            "BILL010",
-            "CUST005",
-            "2026-08-01",
-            "2026-08-31",
-            499.00,
-            "2026-09-01",
-            "PAID",
-        ),
-        (
-            "BILL011",
-            "CUST005",
-            "2026-07-01",
-            "2026-07-31",
-            649.00,
-            "2026-08-01",
-            "PAID",
-        ),
-        (
-            "BILL012",
-            "CUST005",
-            "2026-06-01",
-            "2026-06-30",
-            499.00,
-            "2026-07-01",
-            "PAID",
-        ),
-        # CUST006 - partially paid current bill
-        (
-            "BILL013",
-            "CUST006",
-            "2026-09-01",
-            "2026-09-30",
-            1749.00,
-            "2026-10-01",
-            "PARTIALLY_PAID",
-        ),
-        (
-            "BILL014",
-            "CUST006",
-            "2026-08-01",
-            "2026-08-31",
-            1499.00,
-            "2026-09-01",
-            "PAID",
-        ),
-        # CUST007 - final historical bill
-        (
-            "BILL015",
-            "CUST007",
-            "2025-08-01",
-            "2025-08-31",
-            499.00,
-            "2025-09-01",
-            "PAID",
-        ),
-        # CUST008 - current unpaid fiber bill
-        (
-            "BILL016",
-            "CUST008",
-            "2026-09-01",
-            "2026-09-30",
-            1342.00,
-            "2026-10-09",
-            "UNPAID",
-        ),
-        (
-            "BILL017",
-            "CUST008",
-            "2026-08-01",
-            "2026-08-31",
-            1299.00,
-            "2026-09-09",
-            "PAID",
-        ),
-    ]
-
-    connection.executemany(
-        """
-        INSERT OR IGNORE INTO bills (
-            bill_id,
-            customer_id,
-            billing_period_start,
-            billing_period_end,
-            amount,
-            due_date,
-            status
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
-        bills,
-    )
-
-
-def _insert_bill_items(connection: sqlite3.Connection) -> None:
-    bill_items = [
-        # CUST001
-        (
-            "ITEM001",
-            "BILL001",
-            "NexaMax 799 monthly plan",
-            799.00,
-            "PLAN_CHARGE",
-        ),
-        (
-            "ITEM002",
-            "BILL002",
-            "NexaMax 799 monthly plan",
-            799.00,
-            "PLAN_CHARGE",
-        ),
-
-        # CUST002 - intentionally explainable ₹1,143 bill
-        (
-            "ITEM003",
-            "BILL003",
-            "NexaMax 799 monthly plan",
-            799.00,
-            "PLAN_CHARGE",
-        ),
-        (
-            "ITEM004",
-            "BILL003",
-            "International roaming usage",
-            301.00,
-            "ROAMING",
-        ),
-        (
-            "ITEM005",
-            "BILL003",
-            "Applicable taxes",
-            43.00,
-            "TAX",
-        ),
-        (
-            "ITEM006",
-            "BILL004",
-            "NexaMax 799 monthly plan",
-            799.00,
-            "PLAN_CHARGE",
-        ),
-
-        # CUST003
-        (
-            "ITEM007",
-            "BILL005",
-            "NexaFiber 999 monthly plan",
-            999.00,
-            "PLAN_CHARGE",
-        ),
-        (
-            "ITEM008",
-            "BILL005",
-            "Applicable taxes",
-            43.00,
-            "TAX",
-        ),
-        (
-            "ITEM009",
-            "BILL006",
-            "NexaFiber 999 monthly plan",
-            999.00,
-            "PLAN_CHARGE",
-        ),
-
-        # CUST004
-        (
-            "ITEM010",
-            "BILL007",
-            "NexaMax 999 monthly plan",
-            999.00,
-            "PLAN_CHARGE",
-        ),
-        (
-            "ITEM011",
-            "BILL007",
-            "Additional service charge",
-            200.00,
-            "OTHER",
-        ),
-        (
-            "ITEM012",
-            "BILL008",
-            "NexaMax 999 monthly plan",
-            999.00,
-            "PLAN_CHARGE",
-        ),
-
-        # CUST005
-        (
-            "ITEM013",
-            "BILL009",
-            "NexaMax 499 monthly plan",
-            499.00,
-            "PLAN_CHARGE",
-        ),
-        (
-            "ITEM014",
-            "BILL010",
-            "NexaMax 499 monthly plan",
-            499.00,
-            "PLAN_CHARGE",
-        ),
-        (
-            "ITEM015",
-            "BILL011",
-            "NexaMax 499 monthly plan",
-            499.00,
-            "PLAN_CHARGE",
-        ),
-        (
-            "ITEM016",
-            "BILL011",
-            "Data add-on",
-            150.00,
-            "DATA_ADDON",
-        ),
-        (
-            "ITEM017",
-            "BILL012",
-            "NexaMax 499 monthly plan",
-            499.00,
-            "PLAN_CHARGE",
-        ),
-        # CUST006
-        (
-            "ITEM018",
-            "BILL013",
-            "NexaMax 1499 monthly plan",
-            1499.00,
-            "PLAN_CHARGE",
-        ),
-        (
-            "ITEM019",
-            "BILL013",
-            "International roaming usage",
-            200.00,
-            "ROAMING",
-        ),
-        (
-            "ITEM020",
-            "BILL013",
-            "Applicable taxes",
-            50.00,
-            "TAX",
-        ),
-        (
-            "ITEM021",
-            "BILL014",
-            "NexaMax 1499 monthly plan",
-            1499.00,
-            "PLAN_CHARGE",
-        ),
-        # CUST007
-        (
-            "ITEM022",
-            "BILL015",
-            "NexaMax 499 monthly plan",
-            499.00,
-            "PLAN_CHARGE",
-        ),
-        # CUST008
-        (
-            "ITEM023",
-            "BILL016",
-            "NexaFiber 1299 monthly plan",
-            1299.00,
-            "PLAN_CHARGE",
-        ),
-        (
-            "ITEM024",
-            "BILL016",
-            "Applicable taxes",
-            43.00,
-            "TAX",
-        ),
-        (
-            "ITEM025",
-            "BILL017",
-            "NexaFiber 1299 monthly plan",
-            1299.00,
-            "PLAN_CHARGE",
-        ),
-    ]
-
-    connection.executemany(
-        """
-        INSERT OR IGNORE INTO bill_items (
-            bill_item_id,
-            bill_id,
-            description,
-            amount,
-            item_type
-        )
-        VALUES (?, ?, ?, ?, ?)
-        """,
-        bill_items,
-    )
-
-
-def _insert_payments(connection: sqlite3.Connection) -> None:
-    payments = [
-        # CUST001
-        (
-            "PAY001",
-            "BILL001",
-            "CUST001",
-            799.00,
-            "2026-09-03T10:15:00",
-            "UPI",
-            "SUCCESS",
-            "TXN-C001-0001",
-        ),
-        (
-            "PAY002",
-            "BILL002",
-            "CUST001",
-            799.00,
-            "2026-08-04T09:30:00",
-            "CREDIT_CARD",
-            "SUCCESS",
-            "TXN-C001-0002",
-        ),
-
-        # CUST002
-        (
-            "PAY003",
-            "BILL004",
-            "CUST002",
-            799.00,
-            "2026-08-28T14:20:00",
-            "UPI",
-            "SUCCESS",
-            "TXN-C002-0001",
-        ),
-        (
-            "PAY004",
-            "BILL003",
-            "CUST002",
-            1143.00,
-            "2026-09-22T11:45:00",
-            "UPI",
-            "FAILED",
-            "TXN-C002-0002",
-        ),
-
-        # CUST003
-        (
-            "PAY005",
-            "BILL006",
-            "CUST003",
-            999.00,
-            "2026-08-30T16:00:00",
-            "NET_BANKING",
-            "SUCCESS",
-            "TXN-C003-0001",
-        ),
-
-        # CUST004
-        (
-            "PAY006",
-            "BILL008",
-            "CUST004",
-            999.00,
-            "2026-08-04T10:00:00",
-            "DEBIT_CARD",
-            "SUCCESS",
-            "TXN-C004-0001",
-        ),
-        (
-            "PAY007",
-            "BILL007",
-            "CUST004",
-            500.00,
-            "2026-08-21T12:00:00",
-            "DEBIT_CARD",
-            "SUCCESS",
-            "TXN-C004-0002",
-        ),
-
-        # CUST005 - deliberately multiple payment history
-        (
-            "PAY008",
-            "BILL009",
-            "CUST005",
-            499.00,
-            "2026-09-02T09:10:00",
-            "UPI",
-            "SUCCESS",
-            "TXN-C005-0001",
-        ),
-        (
-            "PAY009",
-            "BILL010",
-            "CUST005",
-            499.00,
-            "2026-08-02T09:30:00",
-            "CREDIT_CARD",
-            "SUCCESS",
-            "TXN-C005-0002",
-        ),
-        (
-            "PAY010",
-            "BILL011",
-            "CUST005",
-            649.00,
-            "2026-07-03T13:20:00",
-            "UPI",
-            "SUCCESS",
-            "TXN-C005-0003",
-        ),
-        (
-            "PAY011",
-            "BILL012",
-            "CUST005",
-            499.00,
-            "2026-06-04T15:40:00",
-            "NET_BANKING",
-            "SUCCESS",
-            "TXN-C005-0004",
-        ),
-        (
-            "PAY012",
-            "BILL011",
-            "CUST005",
-            100.00,
-            "2026-07-02T11:00:00",
-            "UPI",
-            "FAILED",
-            "TXN-C005-0005",
-        ),
-        # CUST006
-        (
-            "PAY013",
-            "BILL014",
-            "CUST006",
-            1499.00,
-            "2026-08-28T10:20:00",
-            "CREDIT_CARD",
-            "SUCCESS",
-            "TXN-C006-0001",
-        ),
-        (
-            "PAY014",
-            "BILL013",
-            "CUST006",
-            1000.00,
-            "2026-09-25T17:05:00",
-            "UPI",
-            "PENDING",
-            "TXN-C006-0002",
-        ),
-        # CUST007
-        (
-            "PAY015",
-            "BILL015",
-            "CUST007",
-            499.00,
-            "2025-08-30T13:00:00",
-            "NET_BANKING",
-            "SUCCESS",
-            "TXN-C007-0001",
-        ),
-        # CUST008
-        (
-            "PAY016",
-            "BILL017",
-            "CUST008",
-            1299.00,
-            "2026-09-07T11:45:00",
-            "DEBIT_CARD",
-            "SUCCESS",
-            "TXN-C008-0001",
-        ),
-    ]
-
-    connection.executemany(
-        """
-        INSERT OR IGNORE INTO payments (
-            payment_id,
-            bill_id,
-            customer_id,
-            amount,
-            payment_date,
-            payment_method,
-            status,
-            transaction_reference
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        payments,
-    )
-
-
-def _insert_support_tickets(connection: sqlite3.Connection) -> None:
-    connection.executemany(
-        """
-        INSERT OR IGNORE INTO support_tickets (
-            ticket_id,
-            customer_id,
-            category,
-            description,
-            status,
-            priority,
-            created_at,
-            updated_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        [
-            (
-                "TICKET001",
-                "CUST001",
-                "PLAN",
-                "Customer requested information about plan benefits.",
-                "RESOLVED",
-                "LOW",
-                "2026-08-10T10:00:00",
-                "2026-08-11T15:30:00",
-            ),
-            (
-                "TICKET002",
-                "CUST002",
-                "BILLING",
-                "Customer asked about unexpected roaming charges.",
-                "IN_PROGRESS",
-                "HIGH",
-                "2026-09-21T09:15:00",
-                "2026-09-22T10:30:00",
-            ),
-            (
-                "TICKET003",
-                "CUST003",
-                "BROADBAND",
-                "Intermittent broadband connectivity reported.",
-                "OPEN",
-                "HIGH",
-                "2026-09-20T08:45:00",
-                "2026-09-21T14:10:00",
-            ),
-            (
-                "TICKET004",
-                "CUST004",
-                "PAYMENT",
-                "Customer reported an issue with an overdue payment.",
-                "OPEN",
-                "CRITICAL",
-                "2026-08-21T12:30:00",
-                "2026-08-22T09:00:00",
-            ),
-            (
-                "TICKET005",
-                "CUST005",
-                "PLAN",
-                "Customer asked about upgrading the current plan.",
-                "CLOSED",
-                "LOW",
-                "2026-07-12T11:00:00",
-                "2026-07-13T16:00:00",
-            ),
-            (
-                "TICKET006",
-                "CUST006",
-                "NETWORK",
-                "Customer reported intermittent 5G connectivity while travelling.",
-                "OPEN",
-                "MEDIUM",
-                "2026-09-23T09:00:00",
-                "2026-09-23T09:00:00",
-            ),
-            (
-                "TICKET007",
-                "CUST007",
-                "OTHER",
-                "Customer requested account closure confirmation.",
-                "RESOLVED",
-                "MEDIUM",
-                "2025-09-02T10:00:00",
-                "2025-09-03T12:00:00",
-            ),
-            (
-                "TICKET008",
-                "CUST008",
-                "BROADBAND",
-                "Customer asked about a brief evening service interruption.",
-                "IN_PROGRESS",
-                "HIGH",
-                "2026-09-22T18:30:00",
-                "2026-09-23T08:15:00",
-            ),
-        ],
-    )
-
-
-def _insert_devices(connection: sqlite3.Connection) -> None:
-    connection.executemany(
-        """
-        INSERT OR IGNORE INTO devices (
-            device_id,
-            customer_id,
-            device_name,
-            device_type,
-            purchase_date,
-            status
-        )
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-        [
-            (
-                "DEV001",
-                "CUST001",
-                "NexaPhone X1",
-                "SMARTPHONE",
-                "2025-09-12",
-                "ACTIVE",
-            ),
-            (
-                "DEV002",
-                "CUST002",
-                "NexaPhone Pro 5G",
-                "SMARTPHONE",
-                "2025-12-03",
-                "ACTIVE",
-            ),
-            (
-                "DEV003",
-                "CUST003",
-                "NexaFiber Router AX",
-                "ROUTER",
-                "2024-12-01",
-                "ACTIVE",
-            ),
-            (
-                "DEV004",
-                "CUST004",
-                "NexaPhone Z",
-                "SMARTPHONE",
-                "2024-02-15",
-                "INACTIVE",
-            ),
-            (
-                "DEV005",
-                "CUST005",
-                "NexaPhone Lite",
-                "SMARTPHONE",
-                "2025-03-10",
-                "ACTIVE",
-            ),
-            (
-                "DEV006",
-                "CUST005",
-                "NexaFiber Mini Router",
-                "ROUTER",
-                "2025-04-01",
-                "ACTIVE",
-            ),
-            (
-                "DEV007",
-                "CUST006",
-                "NexaPhone Ultra 5G",
-                "SMARTPHONE",
-                "2025-04-02",
-                "ACTIVE",
-            ),
-            (
-                "DEV008",
-                "CUST007",
-                "NexaPhone S",
-                "SMARTPHONE",
-                "2024-08-15",
-                "REPLACED",
-            ),
-            (
-                "DEV009",
-                "CUST008",
-                "NexaFiber Router Pro",
-                "ROUTER",
-                "2025-07-10",
-                "ACTIVE",
-            ),
-        ],
-    )
+DEVNAMES = [
+    "Apple iPhone 15",
+    "Samsung Galaxy S24",
+    "TP-Link Archer AX55",
+    "Google Pixel 9",
+    "OnePlus 12",
+    "Samsung Galaxy S24 Ultra",
+    "Nothing Phone (2)",
+    "Netgear Nighthawk AX5400",
+    "OnePlus Nord 4",
+    "Apple iPhone 16",
+    "Samsung Galaxy A55 5G",
+    "TP-Link Archer AX73",
+    "Xiaomi 14",
+    "Motorola Edge 50 Pro",
+    "Apple iPhone 15",
+    "D-Link DIR-X5460",
+    "Apple iPhone 16 Pro",
+    "Samsung Galaxy S24",
+    "OnePlus Nord 4",
+    "TP-Link Archer AX55",
+]
 
 
 def initialize_database(
     connection: sqlite3.Connection,
-    *,
     reset: bool = False,
 ) -> None:
-    """
-    Create the NexaTel schema and optionally seed the database.
-
-    reset=True removes existing application tables before recreating
-    the database. This is intended for deterministic development and
-    testing only.
-    """
-
     if reset:
         _drop_tables(connection)
 
-    schema = SCHEMA_PATH.read_text(encoding="utf-8")
-    connection.executescript(schema)
-
+    connection.executescript(
+        SCHEMA_PATH.read_text(encoding="utf-8")
+    )
     connection.commit()
+
+
+def _id(prefix: str, number: int) -> str:
+    return f"{prefix}{number:03d}"
+
+
+def _last(year: int, month: int) -> int:
+    return monthrange(year, month)[1]
 
 
 def seed_database(
     connection: sqlite3.Connection,
-    *,
     reset: bool = False,
 ) -> None:
-    """
-    Initialize and populate the deterministic NexaTel dataset.
-    """
+    initialize_database(connection, reset=reset)
 
-    initialize_database(
-        connection,
-        reset=reset,
+    connection.executemany(
+        "INSERT INTO customers VALUES (?,?,?,?,?,?,?)",
+        CUSTOMERS,
     )
 
-    try:
-        _insert_customers(connection)
-        _insert_plans(connection)
-        _insert_subscriptions(connection)
-        _insert_usage(connection)
-        _insert_bills(connection)
-        _insert_bill_items(connection)
-        _insert_payments(connection)
-        _insert_support_tickets(connection)
-        _insert_devices(connection)
+    connection.executemany(
+        """
+        INSERT INTO plans (
+            plan_id,
+            plan_name,
+            monthly_price,
+            data_limit_gb,
+            is_data_unlimited,
+            voice_limit_minutes,
+            sms_limit,
+            plan_type
+        )
+        VALUES (?,?,?,?,?,?,?,?)
+        """,
+        PLANS,
+    )
 
-        connection.commit()
+    subscriptions = []
 
-    except Exception:
-        connection.rollback()
-        raise
+    for index, customer in enumerate(CUSTOMERS, 1):
+        if customer[5] == "CANCELLED":
+            status = "CANCELLED"
+        elif customer[5] == "SUSPENDED":
+            status = "SUSPENDED"
+        else:
+            status = "ACTIVE"
+
+        renewal_date = (
+            "2026-08-14"
+            if status == "CANCELLED"
+            else "2026-10-15"
+        )
+
+        subscriptions.append(
+            (
+                _id("SUB", index),
+                customer[0],
+                ASSIGN[index - 1],
+                customer[6],
+                status,
+                renewal_date,
+            )
+        )
+
+    connection.executemany(
+        "INSERT INTO subscriptions VALUES (?,?,?,?,?,?)",
+        subscriptions,
+    )
+
+    _usage(connection, subscriptions)
+    _billing(connection)
+    _tickets(connection)
+    _devices(connection)
+
+    connection.commit()
 
 
-def _drop_tables(connection: sqlite3.Connection) -> None:
-    """
-    Drop all NexaTel application tables.
+def _usage(
+    connection: sqlite3.Connection,
+    subscriptions: list[tuple],
+) -> None:
+    rows = []
+    usage_number = 1
 
-    This is intentionally restricted to the known application tables.
-    """
+    for customer_index, subscription in enumerate(
+        subscriptions,
+        1,
+    ):
+        plan = PLAN_BY_ID[subscription[2]]
+        pattern = PATTERNS[customer_index - 1]
 
+        for month_index, (year, month) in enumerate(MONTHS):
+            if pattern == "cancelled" and month > 7:
+                continue
+
+            if pattern == "fiber":
+                total = (
+                    130
+                    + month_index * 9
+                    + customer_index % 4 * 7
+                )
+            else:
+                total = {
+                    "low": 12,
+                    "stable": 34,
+                    "rising": 24 + month_index * 6,
+                    "heavy": 70 + month_index * 5,
+                    "declining": 48 - month_index * 5,
+                    "spike": (
+                        35
+                        if month != 8
+                        else 68
+                    ),
+                    "cancelled": 26,
+                }.get(pattern, 30)
+
+            # Demo customer CUST006 has a deliberate
+            # month-over-month heavy usage pattern.
+            if customer_index == 6:
+                total = [61, 68, 74, 81, 88, 94][
+                    month_index
+                ]
+
+            for part_index, day in enumerate((5, 15, 25)):
+                data = round(
+                    total
+                    * [0.28, 0.34, 0.38][part_index],
+                    2,
+                )
+
+                if plan[7] == "FIBER":
+                    voice = 0
+                    sms = 0
+                else:
+                    voice = int(
+                        (
+                            220
+                            + customer_index * 11
+                            + month_index * 8
+                        )
+                        * [0.30, 0.35, 0.35][part_index]
+                    )
+
+                    sms = int(
+                        (
+                            24
+                            + customer_index % 6 * 3
+                            + month_index
+                        )
+                        * [0.30, 0.30, 0.40][part_index]
+                    )
+
+                rows.append(
+                    (
+                        _id("USE", usage_number),
+                        subscription[1],
+                        subscription[0],
+                        (
+                            f"{year}-{month:02d}-"
+                            f"{day:02d}"
+                        ),
+                        data,
+                        voice,
+                        sms,
+                    )
+                )
+
+                usage_number += 1
+
+    connection.executemany(
+        "INSERT INTO usage VALUES (?,?,?,?,?,?,?)",
+        rows,
+    )
+
+
+def _billing(connection: sqlite3.Connection) -> None:
+    bills = []
+    items = []
+    payments = []
+
+    bill_number = 1
+    item_number = 1
+    payment_number = 1
+
+    for customer_index, customer in enumerate(
+        CUSTOMERS,
+        1,
+    ):
+        if customer[5] == "CANCELLED":
+            if customer_index == 7:
+                months = MONTHS[:5]
+            else:
+                months = MONTHS[:4]
+        else:
+            months = MONTHS
+
+        plan = PLAN_BY_ID[ASSIGN[customer_index - 1]]
+        price = float(plan[2])
+
+        for month_index, (year, month) in enumerate(months):
+            # Retain IDs expected by existing CUST005
+            # tests/evaluation.
+            if customer_index == 5 and month_index == 4:
+                bill_id = "BILL009"
+
+            elif customer_index == 5 and month_index == 5:
+                bill_id = "BILL010"
+
+            else:
+                while _id(
+                    "BILL",
+                    bill_number,
+                ) in {"BILL009", "BILL010"}:
+                    bill_number += 1
+
+                bill_id = _id("BILL", bill_number)
+                bill_number += 1
+
+            charges = [
+                (
+                    "Monthly plan charge",
+                    price,
+                    "PLAN_CHARGE",
+                )
+            ]
+
+            # Deliberate roaming bill-increase scenario.
+            if customer_index == 2 and month == 9:
+                charges += [
+                    (
+                        "International roaming",
+                        301.0,
+                        "ROAMING",
+                    ),
+                    (
+                        "Roaming tax",
+                        43.0,
+                        "TAX",
+                    ),
+                ]
+
+            # Deliberate data add-on scenario.
+            if customer_index == 10 and month == 8:
+                charges += [
+                    (
+                        "10 GB data add-on",
+                        199.0,
+                        "DATA_ADDON",
+                    )
+                ]
+
+            # Deliberate additional-service scenario.
+            if customer_index == 17 and month == 7:
+                charges += [
+                    (
+                        "International calling service",
+                        149.0,
+                        "OTHER",
+                    )
+                ]
+
+            total = round(
+                sum(charge[1] for charge in charges),
+                2,
+            )
+
+            status = "PAID"
+
+            if customer_index == 2 and month == 9:
+                status = "UNPAID"
+
+            elif customer_index in (4, 15) and month == 9:
+                status = "OVERDUE"
+
+            elif customer_index == 6 and month == 9:
+                status = "PARTIALLY_PAID"
+
+            elif customer_index == 8 and month == 9:
+                status = "UNPAID"
+
+            period_start = f"{year}-{month:02d}-01"
+
+            period_end = (
+                f"{year}-{month:02d}-"
+                f"{_last(year, month):02d}"
+            )
+
+            due_date = (
+                date(
+                    year,
+                    month,
+                    _last(year, month),
+                )
+                + timedelta(days=12)
+            ).isoformat()
+
+            bills.append(
+                (
+                    bill_id,
+                    customer[0],
+                    period_start,
+                    period_end,
+                    total,
+                    due_date,
+                    status,
+                )
+            )
+
+            for description, amount, item_type in charges:
+                items.append(
+                    (
+                        _id("ITEM", item_number),
+                        bill_id,
+                        description,
+                        amount,
+                        item_type,
+                    )
+                )
+                item_number += 1
+
+            payment_date = (
+                (
+                    date(
+                        year,
+                        month,
+                        _last(year, month),
+                    )
+                    + timedelta(days=5)
+                ).isoformat()
+                + "T10:30:00"
+            )
+
+            if status == "PAID":
+                payments.append(
+                    (
+                        _id("PAY", payment_number),
+                        bill_id,
+                        customer[0],
+                        total,
+                        payment_date,
+                        "UPI",
+                        "SUCCESS",
+                        f"TXN2026{payment_number:06d}",
+                    )
+                )
+                payment_number += 1
+
+            elif customer_index == 2 and month == 9:
+                payments.append(
+                    (
+                        _id("PAY", payment_number),
+                        bill_id,
+                        customer[0],
+                        total,
+                        payment_date,
+                        "CREDIT_CARD",
+                        "FAILED",
+                        f"TXN2026{payment_number:06d}",
+                    )
+                )
+                payment_number += 1
+
+            elif customer_index == 6 and month == 9:
+                payments.append(
+                    (
+                        _id("PAY", payment_number),
+                        bill_id,
+                        customer[0],
+                        round(total * 0.45, 2),
+                        payment_date,
+                        "UPI",
+                        "SUCCESS",
+                        f"TXN2026{payment_number:06d}",
+                    )
+                )
+                payment_number += 1
+
+            elif customer_index == 8 and month == 9:
+                payments.append(
+                    (
+                        _id("PAY", payment_number),
+                        bill_id,
+                        customer[0],
+                        total,
+                        payment_date,
+                        "NET_BANKING",
+                        "PENDING",
+                        f"TXN2026{payment_number:06d}",
+                    )
+                )
+                payment_number += 1
+
+            elif customer_index == 15 and month == 9:
+                payments.append(
+                    (
+                        _id("PAY", payment_number),
+                        bill_id,
+                        customer[0],
+                        total,
+                        payment_date,
+                        "DEBIT_CARD",
+                        "FAILED",
+                        f"TXN2026{payment_number:06d}",
+                    )
+                )
+                payment_number += 1
+
+        # Failed-then-successful-retry scenario for
+        # CUST009's June bill.
+        if customer_index == 9:
+            target = [
+                bill
+                for bill in bills
+                if bill[1] == customer[0]
+                and bill[2] == "2026-06-01"
+            ][0]
+
+            payments.append(
+                (
+                    _id("PAY", payment_number),
+                    target[0],
+                    customer[0],
+                    target[4],
+                    "2026-07-02T09:15:00",
+                    "CREDIT_CARD",
+                    "FAILED",
+                    f"TXN2026{payment_number:06d}",
+                )
+            )
+
+            payment_number += 1
+
+    connection.executemany(
+        "INSERT INTO bills VALUES (?,?,?,?,?,?,?)",
+        bills,
+    )
+
+    connection.executemany(
+        "INSERT INTO bill_items VALUES (?,?,?,?,?)",
+        items,
+    )
+
+    connection.executemany(
+        "INSERT INTO payments VALUES (?,?,?,?,?,?,?,?)",
+        payments,
+    )
+
+
+def _tickets(connection: sqlite3.Connection) -> None:
+    rows = []
+    ticket_number = 1
+
+    special = {
+        2: [
+            (
+                "BILLING",
+                (
+                    "Customer reported unexpected "
+                    "international roaming charges."
+                ),
+                "OPEN",
+                "HIGH",
+                "2026-09-18T10:00:00",
+                "2026-09-18T12:30:00",
+            ),
+            (
+                "NETWORK",
+                (
+                    "Intermittent mobile data reported "
+                    "while travelling."
+                ),
+                "RESOLVED",
+                "MEDIUM",
+                "2026-06-11T09:00:00",
+                "2026-06-12T16:00:00",
+            ),
+        ],
+        3: [
+            (
+                "BROADBAND",
+                (
+                    "Wi-Fi speed lower than expected "
+                    "in one room."
+                ),
+                "RESOLVED",
+                "MEDIUM",
+                "2026-05-08T11:00:00",
+                "2026-05-09T15:00:00",
+            ),
+            (
+                "BROADBAND",
+                (
+                    "Router required configuration "
+                    "assistance after reset."
+                ),
+                "CLOSED",
+                "LOW",
+                "2026-08-03T13:00:00",
+                "2026-08-03T16:30:00",
+            ),
+        ],
+        4: [
+            (
+                "PAYMENT",
+                "Payment failed and bill remains overdue.",
+                "IN_PROGRESS",
+                "HIGH",
+                "2026-09-16T10:30:00",
+                "2026-09-17T09:00:00",
+            )
+        ],
+        6: [
+            (
+                "PLAN",
+                (
+                    "Customer asked about higher-data "
+                    "plan options."
+                ),
+                "RESOLVED",
+                "LOW",
+                "2026-08-20T10:00:00",
+                "2026-08-20T14:00:00",
+            )
+        ],
+    }
+
+    for customer_index, customer in enumerate(
+        CUSTOMERS,
+        1,
+    ):
+        entries = special.get(customer_index, [])
+
+        if not entries:
+            entries = [
+                (
+                    "NETWORK",
+                    (
+                        "Customer reported temporary "
+                        "connectivity issue."
+                    ),
+                    "RESOLVED",
+                    "MEDIUM",
+                    (
+                        f"2026-0{4 + (customer_index % 5)}"
+                        "-12T10:00:00"
+                    ),
+                    (
+                        f"2026-0{4 + (customer_index % 5)}"
+                        "-13T11:00:00"
+                    ),
+                )
+            ]
+
+        if (
+            customer_index % 2 == 0
+            and len(entries) < 2
+        ):
+            entries.append(
+                (
+                    "PLAN",
+                    (
+                        "Customer requested clarification "
+                        "about plan benefits."
+                    ),
+                    "CLOSED",
+                    "LOW",
+                    "2026-07-05T09:00:00",
+                    "2026-07-05T12:00:00",
+                )
+            )
+
+        if (
+            customer_index in (1, 5, 9, 13, 17, 20)
+            and len(entries) < 3
+        ):
+            entries.append(
+                (
+                    "OTHER",
+                    (
+                        "Customer requested general "
+                        "account assistance."
+                    ),
+                    "CLOSED",
+                    "LOW",
+                    "2026-04-22T14:00:00",
+                    "2026-04-22T16:00:00",
+                )
+            )
+
+        for entry in entries:
+            rows.append(
+                (
+                    _id("TKT", ticket_number),
+                    customer[0],
+                    *entry,
+                )
+            )
+            ticket_number += 1
+
+    connection.executemany(
+        """
+        INSERT INTO support_tickets
+        VALUES (?,?,?,?,?,?,?,?)
+        """,
+        rows,
+    )
+
+
+def _devices(connection: sqlite3.Connection) -> None:
+    rows = []
+    device_number = 1
+
+    for customer_index, customer in enumerate(
+        CUSTOMERS,
+        1,
+    ):
+        plan = PLAN_BY_ID[
+            ASSIGN[customer_index - 1]
+        ]
+
+        device_type = (
+            "ROUTER"
+            if plan[7] == "FIBER"
+            else "SMARTPHONE"
+        )
+
+        rows.append(
+            (
+                _id("DEV", device_number),
+                customer[0],
+                DEVNAMES[customer_index - 1],
+                device_type,
+                "2025-01-15",
+                (
+                    "ACTIVE"
+                    if customer[5] != "CANCELLED"
+                    else "INACTIVE"
+                ),
+            )
+        )
+
+        device_number += 1
+
+        if customer_index in (
+            1,
+            2,
+            5,
+            6,
+            10,
+            17,
+            18,
+        ):
+            old_device = (
+                "Apple iPhone 15"
+                if device_type == "SMARTPHONE"
+                else "TP-Link Archer AX55"
+            )
+
+            rows.append(
+                (
+                    _id("DEV", device_number),
+                    customer[0],
+                    old_device,
+                    device_type,
+                    "2024-03-10",
+                    "REPLACED",
+                )
+            )
+
+            device_number += 1
+
+        if customer_index in (2, 17):
+            rows.append(
+                (
+                    _id("DEV", device_number),
+                    customer[0],
+                    "Samsung Galaxy A55 5G",
+                    "SMARTPHONE",
+                    "2025-11-20",
+                    "INACTIVE",
+                )
+            )
+
+            device_number += 1
+
+    connection.executemany(
+        "INSERT INTO devices VALUES (?,?,?,?,?,?)",
+        rows,
+    )
+
+
+def _drop_tables(
+    connection: sqlite3.Connection,
+) -> None:
     tables = [
         "devices",
         "support_tickets",
@@ -1477,6 +1000,8 @@ def _drop_tables(connection: sqlite3.Connection) -> None:
     ]
 
     for table in tables:
-        connection.execute(f"DROP TABLE IF EXISTS {table}")
+        connection.execute(
+            f"DROP TABLE IF EXISTS {table}"
+        )
 
     connection.commit()

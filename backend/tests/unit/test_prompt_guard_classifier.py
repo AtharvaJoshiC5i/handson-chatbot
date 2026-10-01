@@ -2,7 +2,12 @@ from app.llm.client import (
     classify_deterministic_request,
     classify_prompt_guard_request,
 )
-from app.models.domain import Intent, TimeRange
+from app.models.domain import (
+    CustomerContext,
+    Intent,
+    TimeRange,
+)
+from app.services.chat_service import ChatService
 
 
 def test_classifier_recognizes_current_year_usage() -> None:
@@ -76,6 +81,34 @@ def test_classifier_recognizes_payment_status_synonyms() -> None:
 
     assert response is not None
     assert response.intent == Intent.GET_PAYMENT_STATUS
+
+
+def test_classifier_clarifies_general_payment_help() -> None:
+    class DeterministicClient:
+        def extract_intent(self, user_message: str):
+            return classify_deterministic_request(
+                user_message
+            )
+
+    service = ChatService(
+        DeterministicClient()
+    )
+    response = service.respond(
+        db=None,
+        customer=CustomerContext(
+            customer_id="CUST001"
+        ),
+        user_message="Help with a payment",
+    )
+
+    assert response.status == "AMBIGUOUS"
+    assert "What would you like help with?" in response.message
+    assert {option.label for option in response.options} == {
+        "Latest payment status",
+        "Payment history",
+        "Bill and payment status",
+        "Payment support tickets",
+    }
 
 
 def test_prompt_guard_keeps_unrelated_requests_unsupported() -> None:

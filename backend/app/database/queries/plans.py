@@ -18,6 +18,7 @@ def get_plan_by_id(
             plan_name AS name,
             monthly_price,
             data_limit_gb,
+            is_data_unlimited,
             voice_limit_minutes,
             sms_limit,
             plan_type

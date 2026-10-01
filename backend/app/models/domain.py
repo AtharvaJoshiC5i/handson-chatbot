@@ -1,21 +1,21 @@
 from datetime import date, datetime
 from enum import Enum
-from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+)
 
 
 class AccountStatus(str, Enum):
-    """Valid NexaTel customer account states."""
-
     ACTIVE = "ACTIVE"
     SUSPENDED = "SUSPENDED"
     CANCELLED = "CANCELLED"
 
 
 class BillStatus(str, Enum):
-    """Valid NexaTel bill states."""
-
     PAID = "PAID"
     UNPAID = "UNPAID"
     OVERDUE = "OVERDUE"
@@ -23,8 +23,6 @@ class BillStatus(str, Enum):
 
 
 class PaymentMethod(str, Enum):
-    """Supported payment methods."""
-
     UPI = "UPI"
     CREDIT_CARD = "CREDIT_CARD"
     DEBIT_CARD = "DEBIT_CARD"
@@ -32,16 +30,21 @@ class PaymentMethod(str, Enum):
 
 
 class PaymentStatus(str, Enum):
-    """Supported payment states."""
-
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
     PENDING = "PENDING"
 
 
-class SupportTicketStatus(str, Enum):
-    """Valid support-ticket states."""
+class PaymentAggregateType(str, Enum):
+    TOTAL_SUCCESSFUL_AMOUNT = "TOTAL_SUCCESSFUL_AMOUNT"
+    AVERAGE_SUCCESSFUL_AMOUNT = "AVERAGE_SUCCESSFUL_AMOUNT"
+    COUNT_ALL = "COUNT_ALL"
+    COUNT_SUCCESSFUL = "COUNT_SUCCESSFUL"
+    COUNT_FAILED = "COUNT_FAILED"
+    COUNT_PENDING = "COUNT_PENDING"
 
+
+class SupportTicketStatus(str, Enum):
     OPEN = "OPEN"
     IN_PROGRESS = "IN_PROGRESS"
     RESOLVED = "RESOLVED"
@@ -49,8 +52,6 @@ class SupportTicketStatus(str, Enum):
 
 
 class SupportTicketPriority(str, Enum):
-    """Valid support-ticket priorities."""
-
     LOW = "LOW"
     MEDIUM = "MEDIUM"
     HIGH = "HIGH"
@@ -58,8 +59,6 @@ class SupportTicketPriority(str, Enum):
 
 
 class SupportTicketCategory(str, Enum):
-    """Valid support-ticket categories."""
-
     BILLING = "BILLING"
     NETWORK = "NETWORK"
     BROADBAND = "BROADBAND"
@@ -68,24 +67,37 @@ class SupportTicketCategory(str, Enum):
     OTHER = "OTHER"
 
 
-class DeviceStatus(str, Enum):
-    """Valid customer-device states."""
+class SupportSortOrder(str, Enum):
+    NEWEST = "NEWEST"
+    OLDEST = "OLDEST"
 
+
+class DeviceStatus(str, Enum):
     ACTIVE = "ACTIVE"
     INACTIVE = "INACTIVE"
     REPLACED = "REPLACED"
     LOST = "LOST"
 
 
+class DeviceType(str, Enum):
+    SMARTPHONE = "SMARTPHONE"
+    ROUTER = "ROUTER"
+    TABLET = "TABLET"
+    MODEM = "MODEM"
+    OTHER = "OTHER"
+
+
+class DeviceSortOrder(str, Enum):
+    NEWEST = "NEWEST"
+    OLDEST = "OLDEST"
+
+
+class DeviceExtremeType(str, Enum):
+    NEWEST = "NEWEST"
+    OLDEST = "OLDEST"
+
+
 class TruthStatus(str, Enum):
-    """
-    Status of an authoritative backend result.
-
-    These values are intentionally broader than HTTP status codes.
-    They represent the semantic state of the information returned
-    by the application's data/verification layer.
-    """
-
     VERIFIED = "VERIFIED"
     NOT_FOUND = "NOT_FOUND"
     AMBIGUOUS = "AMBIGUOUS"
@@ -96,83 +108,161 @@ class TruthStatus(str, Enum):
 
 
 class SourceType(str, Enum):
-    """Authoritative source categories."""
-
     SQLITE = "SQLITE"
 
 
 class Intent(str, Enum):
-    """
-    Complete Phase 1 supported intent set.
-
-    The LLM may only return one of these values. UNSUPPORTED is used
-    when the user's request cannot be handled by the Phase 1 system.
-    """
-
+    # Account / plan
     GET_CURRENT_PLAN = "GET_CURRENT_PLAN"
     GET_ACCOUNT_STATUS = "GET_ACCOUNT_STATUS"
     GET_PLAN_RENEWAL = "GET_PLAN_RENEWAL"
 
+    # Phase 1 — usage
     GET_DATA_USAGE = "GET_DATA_USAGE"
     GET_VOICE_USAGE = "GET_VOICE_USAGE"
+    GET_USAGE_REMAINING = "GET_USAGE_REMAINING"
+    GET_USAGE_PERCENTAGE = "GET_USAGE_PERCENTAGE"
+    GET_USAGE_SUMMARY = "GET_USAGE_SUMMARY"
+    GET_USAGE_HISTORY = "GET_USAGE_HISTORY"
+    GET_USAGE_COMPARISON = "GET_USAGE_COMPARISON"
+    GET_USAGE_AVERAGE = "GET_USAGE_AVERAGE"
+    GET_USAGE_EXTREME = "GET_USAGE_EXTREME"
+    GET_USAGE_TREND = "GET_USAGE_TREND"
 
+    # Phase 2 — billing
     GET_CURRENT_BILL = "GET_CURRENT_BILL"
     GET_BILL_HISTORY = "GET_BILL_HISTORY"
     GET_TOTAL_SPENDING = "GET_TOTAL_SPENDING"
     GET_BILL_COMPARISON = "GET_BILL_COMPARISON"
+    GET_SPECIFIC_BILL = "GET_SPECIFIC_BILL"
+    GET_BILL_BREAKDOWN = "GET_BILL_BREAKDOWN"
+    EXPLAIN_BILL_CHANGE = "EXPLAIN_BILL_CHANGE"
+    GET_AVERAGE_BILL = "GET_AVERAGE_BILL"
+    GET_BILL_EXTREME = "GET_BILL_EXTREME"
+    GET_BILL_TREND = "GET_BILL_TREND"
+    FILTER_BILLS = "FILTER_BILLS"
 
+    # Phase 3 — payments
     GET_PAYMENT_STATUS = "GET_PAYMENT_STATUS"
     GET_PAYMENT_HISTORY = "GET_PAYMENT_HISTORY"
+    FILTER_PAYMENTS = "FILTER_PAYMENTS"
+    GET_LAST_SUCCESSFUL_PAYMENT = "GET_LAST_SUCCESSFUL_PAYMENT"
+    GET_LAST_FAILED_PAYMENT = "GET_LAST_FAILED_PAYMENT"
+    GET_PAYMENT_BY_REFERENCE = "GET_PAYMENT_BY_REFERENCE"
+    RECONCILE_BILL_PAYMENT = "RECONCILE_BILL_PAYMENT"
+    GET_PAYMENT_OUTSTANDING = "GET_PAYMENT_OUTSTANDING"
+    GET_PAYMENT_SUMMARY = "GET_PAYMENT_SUMMARY"
+    GET_PAYMENT_AGGREGATE = "GET_PAYMENT_AGGREGATE"
 
+    # Phase 4 — support
     GET_SUPPORT_TICKETS = "GET_SUPPORT_TICKETS"
+    GET_LATEST_SUPPORT_TICKET = "GET_LATEST_SUPPORT_TICKET"
+    GET_SPECIFIC_SUPPORT_TICKET = "GET_SPECIFIC_SUPPORT_TICKET"
+    FILTER_SUPPORT_TICKETS = "FILTER_SUPPORT_TICKETS"
+    GET_SUPPORT_TICKET_COUNT = "GET_SUPPORT_TICKET_COUNT"
+    GET_SUPPORT_COMMON_CATEGORY = "GET_SUPPORT_COMMON_CATEGORY"
+    GET_SUPPORT_SUMMARY = "GET_SUPPORT_SUMMARY"
+    GET_SUPPORT_LAST_UPDATED = "GET_SUPPORT_LAST_UPDATED"
+
+    # Phase 4 — devices
     GET_DEVICE_INFORMATION = "GET_DEVICE_INFORMATION"
+    GET_SPECIFIC_DEVICE = "GET_SPECIFIC_DEVICE"
+    FILTER_DEVICES = "FILTER_DEVICES"
+    GET_DEVICE_COUNT = "GET_DEVICE_COUNT"
+    GET_DEVICE_EXTREME = "GET_DEVICE_EXTREME"
+    GET_DEVICE_SUMMARY = "GET_DEVICE_SUMMARY"
+    GET_DEVICE_DIAGNOSTIC_LIMITATION = (
+        "GET_DEVICE_DIAGNOSTIC_LIMITATION"
+    )
+
+    # Phase 5 — cross-domain
+    GET_PLAN_USAGE_STATUS = "GET_PLAN_USAGE_STATUS"
+    GET_BILL_PAYMENT_STATUS = "GET_BILL_PAYMENT_STATUS"
+    GET_BILL_PAYMENT_EXPLANATION = (
+        "GET_BILL_PAYMENT_EXPLANATION"
+    )
+    GET_BILLING_SUPPORT_STATUS = "GET_BILLING_SUPPORT_STATUS"
+    GET_PAYMENT_SUPPORT_STATUS = "GET_PAYMENT_SUPPORT_STATUS"
+    GET_ACCOUNT_PLAN_STATUS = "GET_ACCOUNT_PLAN_STATUS"
+    GET_ACCOUNT_ATTENTION_SUMMARY = (
+        "GET_ACCOUNT_ATTENTION_SUMMARY"
+    )
+
+    # Phase 6 — customer 360
+    GET_CUSTOMER_360 = "GET_CUSTOMER_360"
 
     UNSUPPORTED = "UNSUPPORTED"
 
 
 class TimeRange(str, Enum):
-    """Supported relative time ranges."""
-
     CURRENT_MONTH = "CURRENT_MONTH"
     LAST_MONTH = "LAST_MONTH"
     CURRENT_YEAR = "CURRENT_YEAR"
 
 
+class UsageType(str, Enum):
+    DATA = "DATA"
+    VOICE = "VOICE"
+    SMS = "SMS"
+
+
+class UsagePercentageType(str, Enum):
+    CONSUMED = "CONSUMED"
+    REMAINING = "REMAINING"
+
+
+class UsageExtremeType(str, Enum):
+    HIGHEST = "HIGHEST"
+    LOWEST = "LOWEST"
+
+
+class BillExtremeType(str, Enum):
+    HIGHEST = "HIGHEST"
+    LOWEST = "LOWEST"
+
+
+class BillSortOrder(str, Enum):
+    NEWEST = "NEWEST"
+    OLDEST = "OLDEST"
+    AMOUNT_HIGH_TO_LOW = "AMOUNT_HIGH_TO_LOW"
+    AMOUNT_LOW_TO_HIGH = "AMOUNT_LOW_TO_HIGH"
+
+
 class CustomerContext(BaseModel):
-    """
-    Authenticated customer context.
-
-    This object represents identity established by the backend,
-    not identity inferred from a user message.
-    """
-
     model_config = ConfigDict(frozen=True)
 
-    customer_id: str = Field(min_length=1, max_length=64)
+    customer_id: str = Field(
+        min_length=1,
+        max_length=64,
+    )
 
     @field_validator("customer_id")
     @classmethod
-    def validate_customer_id(cls, value: str) -> str:
+    def validate_customer_id(
+        cls,
+        value: str,
+    ) -> str:
         value = value.strip()
 
         if not value:
-            raise ValueError("Customer ID cannot be empty.")
+            raise ValueError(
+                "Customer ID cannot be empty."
+            )
 
         return value
 
 
 class TruthSource(BaseModel):
-    """Metadata describing where verified facts originated."""
-
     model_config = ConfigDict(frozen=True)
 
     source_type: SourceType
-    source_name: str = Field(min_length=1, max_length=128)
+    source_name: str = Field(
+        min_length=1,
+        max_length=128,
+    )
 
 
 class DateRange(BaseModel):
-    """Resolved concrete date range used by backend logic."""
-
     start_date: date
     end_date: date
 
@@ -183,17 +273,22 @@ class DateRange(BaseModel):
         value: date,
         info,
     ) -> date:
-        start_date = info.data.get("start_date")
+        start_date = info.data.get(
+            "start_date"
+        )
 
-        if start_date is not None and value < start_date:
-            raise ValueError("End date cannot be before start date.")
+        if (
+            start_date is not None
+            and value < start_date
+        ):
+            raise ValueError(
+                "End date cannot be before start date."
+            )
 
         return value
 
 
 class CustomerRecord(BaseModel):
-    """Domain representation of a customer."""
-
     customer_id: str
     name: str
     email: str
@@ -204,20 +299,17 @@ class CustomerRecord(BaseModel):
 
 
 class PlanRecord(BaseModel):
-    """Domain representation of a NexaTel plan."""
-
     plan_id: str
     plan_name: str
     monthly_price: float
     data_limit_gb: float
+    is_data_unlimited: bool = False
     voice_limit_minutes: int
     sms_limit: int
     plan_type: str
 
 
 class SubscriptionRecord(BaseModel):
-    """Domain representation of a customer subscription."""
-
     subscription_id: str
     customer_id: str
     plan_id: str
@@ -227,8 +319,6 @@ class SubscriptionRecord(BaseModel):
 
 
 class UsageRecord(BaseModel):
-    """Domain representation of one usage record."""
-
     usage_id: str
     customer_id: str
     subscription_id: str
@@ -239,8 +329,6 @@ class UsageRecord(BaseModel):
 
 
 class BillRecord(BaseModel):
-    """Domain representation of a bill."""
-
     bill_id: str
     customer_id: str
     billing_period_start: date
@@ -251,8 +339,6 @@ class BillRecord(BaseModel):
 
 
 class BillItemRecord(BaseModel):
-    """Domain representation of an individual bill item."""
-
     bill_item_id: str
     bill_id: str
     description: str
@@ -261,8 +347,6 @@ class BillItemRecord(BaseModel):
 
 
 class PaymentRecord(BaseModel):
-    """Domain representation of a payment."""
-
     payment_id: str
     bill_id: str
     customer_id: str
@@ -274,8 +358,6 @@ class PaymentRecord(BaseModel):
 
 
 class SupportTicketRecord(BaseModel):
-    """Domain representation of a support ticket."""
-
     ticket_id: str
     customer_id: str
     category: SupportTicketCategory
@@ -287,8 +369,6 @@ class SupportTicketRecord(BaseModel):
 
 
 class DeviceRecord(BaseModel):
-    """Domain representation of a customer device."""
-
     device_id: str
     customer_id: str
     device_name: str

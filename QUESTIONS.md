@@ -1,169 +1,154 @@
 # NexaTel Chatbot Questions
 
-Select a customer in the frontend before asking these questions. The
-responses below should be grounded in the selected customer's database data.
+Select a customer in the frontend before asking a question. The backend uses
+that selected account to retrieve records and perform all authoritative
+calculations and checks. The LLM may help classify a request and phrases the
+final response from backend-produced answer text; it does not query the
+database or calculate account facts.
 
-## Direct-Answer Checks
+The examples below cover the supported intent families. Natural phrasing may
+vary, but answers depend on the selected customer's available records and the
+requested period or filters.
 
-These should be answered directly from SQLite without the LLM generating the
-answer text:
-
-## Account
+## Account and Plan
 
 - What is my account status?
-- Is my account active?
-- Is my account suspended?
-- Is my account cancelled?
-- Tell me about my account status.
+- Is my account active, suspended, or cancelled?
+- What plan and subscription do I have?
+- What are the details of my current plan?
+- When does my plan renew?
+- Is my account and subscription active?
+- Give me a summary of my account.
 
-## Plans
+## Usage
 
-- What plan am I currently on?
-- Which NexaTel plan do I have?
-- What subscription am I using?
-- What are my current plan details?
-- When will my plan renew?
-- When is my next plan renewal?
-- What date does my subscription renew?
-- When does my plan expire?
+Ask about data or voice usage for a supported period, or request an analysis
+of the available usage records.
 
-## Data Usage
-
-- How much data have I used this month?
-- Show me my data usage for this month.
-- How much mobile data have I consumed this month?
-- How much data did I use last month?
-- Show my data consumption from last month.
-- How much data have I used this year?
-- What is my data usage?
-
-## Voice Usage
-
-- How many voice minutes have I used this month?
-- How many call minutes have I consumed this month?
-- Show my voice usage for last month.
-- How many minutes have I used this year?
-- What is my call usage?
+- How much data have I used this month, last month, or this year?
+- How many voice minutes did I use last month?
+- How much data or voice allowance do I have remaining?
+- What percentage of my data allowance have I used?
+- Summarize my usage this month.
+- Show my data usage history for the last 3 months.
+- Compare my voice usage this month with last month.
+- What is my average monthly data usage?
+- Which month had my highest data usage?
+- What is the trend in my voice usage?
 
 ## Bills
 
-- What is my current bill?
-- How much is my current bill?
+- What is my current bill, and when is it due?
 - What do I currently owe?
-- Show me my current invoice.
-- Show my bill history.
-- Show me my last 5 bills.
-- Show my last 3 billing records.
-- Show my most recent bill.
-- How much have I spent?
-- How much have I spent in total?
-- What is my total spending for my last 3 bills?
+- Show bill BILL003.
+- Show my last 5 bills.
+- Break down my current bill.
 - Compare my current bill with last month's bill.
-- Compare my current bill with the previous bill.
-- Compare BILL003 and BILL004.
+- Why did my bill change from last month?
+- How much have I spent on my last 3 bills?
+- What is my average bill?
+- Which of my last 6 bills was the highest?
+- Show my bill trend over the last 6 months.
+- Show my unpaid bills, newest first.
 
 ## Payments
 
 - What is the status of my latest payment?
-- Is my latest payment pending?
-- Was my last payment successful?
-- Show me my payment history.
+- Has my latest payment gone through?
+- Did my last payment fail?
 - Show my last 5 payments.
-- Payments
+- List my failed payments this year.
+- What is the payment with transaction reference TXN2026000006?
+- How much is still outstanding on my current bill?
+- Reconcile my current bill and payments.
+- Summarize my payments this year.
+- How many payments were successful this month?
 
 ## Support Tickets
 
 - What support tickets do I have?
-- Do I have any open support tickets?
 - Show my open support cases.
-- What is the status of my support requests?
-- Show my last 3 tickets.
+- List my high-priority billing tickets.
+- Do I have any unresolved tickets?
+- How many support tickets do I have?
+- What is my most common support-ticket category?
+- Summarize my support history.
+- What is the latest update on ticket TKT003?
 
 ## Devices
 
-- What devices are on my account?
 - What devices are associated with my account?
-- Show my phones.
-- What router do I have?
-- List the devices connected to my account.
-
-## Additional Supported Variations
-
-- Can you tell me my current plan?
-- What happened with my recent payment?
-- How much have I spent on my bills?
-- Is my account currently active?
-- What is the current status of my account?
-- What service plan do I have?
-- When will my subscription expire?
-- Show me my current-year data usage.
-- How many minutes did I use last month?
-- Show my voice usage for this month.
-- What is the amount due?
-- How much is my latest invoice?
-- Show me my phone bill.
-- What were my previous bills?
-- List my recent invoices.
-- How much did I spend across my last 3 bills?
-- What is the total amount I have paid?
-- Why is my current bill different from last month?
-- Show the difference between BILL009 and BILL010.
-- Which of my last two bills was higher?
-- What is the status of my payment?
-- Did my last payment fail?
-- Has my latest payment gone through?
-- List my recent payments.
-- Do I have any unresolved tickets?
-- List my active devices.
+- Show my active phones.
 - Do I have a router registered?
-- What phones and routers are linked to my account?
+- Show device DEV001.
+- How many active devices do I have?
+- Which device was added most recently?
+- Summarize the devices on my account.
+- Can you diagnose why my device is malfunctioning?
+
+The chatbot can report device records, but it cannot perform live device,
+network, or connectivity diagnostics.
+
+## Combined Account Questions
+
+- How am I doing on my plan and data allowance?
+- What is my current bill and its payment status?
+- Explain my bill charges and payment status.
+- Do I have any billing-related support tickets?
+- Do I have any payment-related support tickets?
+- Is anything on my account in need of attention?
+- Give me an overview of my account, plan, usage, bills, payments, support
+	tickets, and devices.
+
+The chatbot does not assume that a billing-category ticket is about a
+particular bill, or that a payment-category ticket is about a particular
+transaction, unless the backend explicitly establishes that relationship.
 
 ## Clarification Checks
 
-These are intentionally ambiguous. The chatbot should ask a clarification
-question instead of choosing a database query:
+The chatbot should ask a follow-up question when a request does not identify
+which data to retrieve, rather than guessing.
 
-- How much have I used?
+- How much have I used? (Clarify data versus voice usage.)
+- Show me my information. (Offer account, plan, usage, billing, payment,
+	support, or device topics.)
+- Help with a payment. (Clarify payment status, payment history, bill/payment
+	status, or payment-related support.)
 - What are my latest details?
-- Show me my information.
-- What happened with my account?
 
-For the first question, the clarification should distinguish between data
-usage and voice/call-minute usage.
+## Account and Parameter Safety
 
-## Payment Status Synonyms
+- Try the same question with different customers selected; results must stay
+	scoped to the selected account.
+- Show my last 3 bills, last 5 payments, or last 3 support tickets. The
+	response should respect the requested limit.
+- Compare BILL003 and BILL004. Only return details if both bills belong to the
+	selected customer.
+- Ask about another customer's bill ID. The chatbot must not disclose it.
+- A customer ID typed into the message must not change the selected account.
 
-These should return the latest payment status, not payment history:
+## Unsupported Requests
 
-- Has my latest payment gone through?
-- Was my latest payment successful?
-- Did my last payment fail?
-- Is my payment pending?
-- What happened with my recent payment?
-
-## Parameter Safety Checks
-
-These should use the requested limit or bill IDs and remain restricted to the
-selected customer's records:
-
-- Show my last 3 bills.
-- Show my last 5 payments.
-- List my last 3 support tickets.
-- Compare BILL003 and BILL004.
-- Show the difference between BILL009 and BILL010.
-
-Try the bill-ID questions while different customers are selected. A bill that
-does not belong to the selected customer should not be disclosed.
-
-## Unsupported Action or Unrelated Questions
-
-These should receive an unsupported response because the chatbot currently
-only reads account data:
+The chatbot is read-only and limited to the capabilities above. These should
+not trigger a database action or an invented answer:
 
 - Cancel my subscription.
 - Upgrade my plan.
 - Make a payment for me.
 - Open a support ticket.
-- Troubleshoot my network.
+- Troubleshoot my network connection.
 - What will the weather be tomorrow?
 - Tell me a general trivia fact.
+
+## Questions With Visualizations
+
+These time-series questions can include a chart alongside the written
+answer. Exact period values remain visible beneath the chart. Histories with
+fewer than three periods remain in the existing table format.
+
+- Show my data usage history for the last 3 months.
+- Show my voice usage history for the last 6 months.
+- Show my data usage trend over the last 6 months.
+- Show my voice usage trend over the last 6 months.
+- Show my last 5 bills.
+- Show my bill trend over the last 6 months.

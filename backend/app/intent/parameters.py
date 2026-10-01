@@ -4,38 +4,55 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.business.validation import validate_limit
-from app.models.domain import TimeRange
-from app.models.llm import IntentParameters
-from app.utils.errors import ValidationError
+from app.business.validation import (
+    validate_limit,
+)
+from app.models.domain import (
+    BillExtremeType,
+    BillSortOrder,
+    BillStatus,
+    DeviceExtremeType,
+    DeviceSortOrder,
+    DeviceStatus,
+    DeviceType,
+    PaymentAggregateType,
+    PaymentMethod,
+    PaymentStatus,
+    SupportSortOrder,
+    SupportTicketCategory,
+    SupportTicketPriority,
+    SupportTicketStatus,
+    TimeRange,
+    UsageExtremeType,
+    UsagePercentageType,
+    UsageType,
+)
+from app.models.llm import (
+    IntentParameters,
+)
+from app.utils.errors import (
+    ValidationError,
+)
 
 
-def _validate_identifier(
-    value: str | None,
-    parameter_name: str,
+def _identifier(
+    value: str,
+    name: str,
 ) -> str:
-    """Validate a backend resource identifier."""
-
-    if value is None:
-        raise ValidationError(
-            f"Parameter '{parameter_name}' is required."
-        )
-
-    if not isinstance(value, str):
-        raise ValidationError(
-            f"Parameter '{parameter_name}' must be a string."
-        )
-
-    normalized = value.strip()
+    normalized = (
+        value.strip()
+    )
 
     if not normalized:
         raise ValidationError(
-            f"Parameter '{parameter_name}' cannot be empty."
+            f"Parameter '{name}' "
+            "cannot be empty."
         )
 
-    if len(normalized) > 100:
+    if len(normalized) > 150:
         raise ValidationError(
-            f"Parameter '{parameter_name}' is too long."
+            f"Parameter '{name}' "
+            "is too long."
         )
 
     return normalized
@@ -44,38 +61,199 @@ def _validate_identifier(
 def normalize_parameters(
     parameters: IntentParameters,
 ) -> dict[str, Any]:
-    """Convert LLM parameters into validated backend parameters.
+    normalized: dict[
+        str,
+        Any,
+    ] = {}
 
-    The resulting dictionary is safe for the intent router to consume.
+    enum_fields = {
+        "time_range": (
+            TimeRange
+        ),
+        "usage_type": (
+            UsageType
+        ),
+        "percentage_type": (
+            UsagePercentageType
+        ),
+        "extreme_type": (
+            UsageExtremeType
+        ),
+        "bill_extreme_type": (
+            BillExtremeType
+        ),
+        "status_filter": (
+            BillStatus
+        ),
+        "sort_order": (
+            BillSortOrder
+        ),
+        "payment_status": (
+            PaymentStatus
+        ),
+        "payment_method": (
+            PaymentMethod
+        ),
+        "payment_aggregate_type": (
+            PaymentAggregateType
+        ),
+        "ticket_status": (
+            SupportTicketStatus
+        ),
+        "ticket_priority": (
+            SupportTicketPriority
+        ),
+        "ticket_category": (
+            SupportTicketCategory
+        ),
+        "support_sort_order": (
+            SupportSortOrder
+        ),
+        "device_status": (
+            DeviceStatus
+        ),
+        "device_type": (
+            DeviceType
+        ),
+        "device_sort_order": (
+            DeviceSortOrder
+        ),
+        "device_extreme_type": (
+            DeviceExtremeType
+        ),
+    }
 
-    This function does not perform database operations.
-    """
+    for (
+        field_name,
+        enum_type,
+    ) in enum_fields.items():
+        value = getattr(
+            parameters,
+            field_name,
+        )
 
-    normalized: dict[str, Any] = {}
+        if value is None:
+            continue
 
-    if parameters.time_range is not None:
-        if not isinstance(parameters.time_range, TimeRange):
+        if not isinstance(
+            value,
+            enum_type,
+        ):
             raise ValidationError(
-                "Invalid time range parameter."
+                f"Invalid {field_name} "
+                "parameter."
             )
 
-        normalized["time_range"] = parameters.time_range
+        normalized[
+            field_name
+        ] = value
 
-    if parameters.limit is not None:
-        normalized["limit"] = validate_limit(
+    integer_fields = {
+        "month": (
+            parameters.month,
+            1,
+            12,
+        ),
+        "comparison_month": (
+            parameters.comparison_month,
+            1,
+            12,
+        ),
+        "year": (
+            parameters.year,
+            2000,
+            2100,
+        ),
+        "comparison_year": (
+            parameters.comparison_year,
+            2000,
+            2100,
+        ),
+        "month_count": (
+            parameters.month_count,
+            1,
+            12,
+        ),
+    }
+
+    for (
+        name,
+        (
+            value,
+            minimum,
+            maximum,
+        ),
+    ) in integer_fields.items():
+        if value is None:
+            continue
+
+        if not (
+            minimum
+            <= value
+            <= maximum
+        ):
+            raise ValidationError(
+                f"Parameter '{name}' "
+                "is outside the "
+                "supported range."
+            )
+
+        normalized[
+            name
+        ] = value
+
+    if (
+        parameters.limit
+        is not None
+    ):
+        normalized[
+            "limit"
+        ] = validate_limit(
             parameters.limit
         )
 
-    if parameters.current_bill_id is not None:
-        normalized["current_bill_id"] = _validate_identifier(
-            parameters.current_bill_id,
-            "current_bill_id",
+    if (
+        parameters.minimum_amount
+        is not None
+    ):
+        normalized[
+            "minimum_amount"
+        ] = float(
+            parameters.minimum_amount
         )
 
-    if parameters.previous_bill_id is not None:
-        normalized["previous_bill_id"] = _validate_identifier(
-            parameters.previous_bill_id,
-            "previous_bill_id",
+    string_fields = (
+        "current_bill_id",
+        "previous_bill_id",
+        "transaction_reference",
+        "ticket_id",
+        "device_id",
+    )
+
+    for field_name in (
+        string_fields
+    ):
+        value = getattr(
+            parameters,
+            field_name,
+        )
+
+        if value is not None:
+            normalized[
+                field_name
+            ] = _identifier(
+                value,
+                field_name,
+            )
+
+    if (
+        parameters.unresolved_only
+        is not None
+    ):
+        normalized[
+            "unresolved_only"
+        ] = bool(
+            parameters.unresolved_only
         )
 
     return normalized
@@ -83,38 +261,62 @@ def normalize_parameters(
 
 def validate_required_parameters(
     *,
-    intent_parameters: dict[str, Any],
-    required_parameters: set[str] | frozenset[str],
+    intent_parameters: dict[
+        str,
+        Any,
+    ],
+    required_parameters: (
+        set[str]
+        | frozenset[str]
+    ),
 ) -> None:
-    """Ensure all parameters required by an intent are present."""
-
     missing = [
         parameter
-        for parameter in required_parameters
-        if parameter not in intent_parameters
-        or intent_parameters[parameter] is None
+        for parameter
+        in required_parameters
+        if intent_parameters.get(
+            parameter
+        )
+        is None
     ]
 
     if missing:
         raise ValidationError(
-            "Missing required parameter(s): "
-            + ", ".join(sorted(missing))
+            "Missing required "
+            "parameter(s): "
+            + ", ".join(
+                sorted(
+                    missing
+                )
+            )
         )
 
 
 def validate_allowed_parameters(
     *,
-    intent_parameters: dict[str, Any],
-    allowed_parameters: set[str] | frozenset[str],
+    intent_parameters: dict[
+        str,
+        Any,
+    ],
+    allowed_parameters: (
+        set[str]
+        | frozenset[str]
+    ),
 ) -> None:
-    """Reject parameters that do not belong to the selected intent."""
-
     unexpected = sorted(
-        set(intent_parameters) - set(allowed_parameters)
+        set(
+            intent_parameters
+        )
+        - set(
+            allowed_parameters
+        )
     )
 
     if unexpected:
         raise ValidationError(
-            "Parameter(s) not valid for this intent: "
-            + ", ".join(unexpected)
+            "Parameter(s) not valid "
+            "for this intent: "
+            + ", ".join(
+                unexpected
+            )
         )

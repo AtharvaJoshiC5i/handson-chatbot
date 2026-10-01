@@ -1,43 +1,82 @@
-"""Chat API route for NexaTel."""
+"""Chat API route."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+import json
+import sqlite3
+from collections.abc import Iterator
 
-from app.api.dependencies import get_customer_context
-from app.config.settings import get_settings
+from fastapi import (
+    APIRouter,
+    Depends,
+    Header,
+    HTTPException,
+    status,
+)
+from fastapi.responses import StreamingResponse
+
+from app.config.settings import (
+    Settings,
+    get_settings,
+)
 from app.database.connection import get_db
 from app.llm.client import GroqLLMClient
-from app.intent.router import IntentRouter
-from app.models.api import ChatRequest, ChatResponse
+from app.models.api import (
+    ChatRequest,
+    ChatResponse,
+    ConversationResetRequest,
+)
 from app.models.domain import CustomerContext
 from app.services.chat_service import ChatService
-from app.services.response_service import ResponseService
-from app.utils.errors import LLMError, NexaTelError
+from app.services.conversation_service import ConversationService
+from app.utils.errors import LLMError
 
 
 router = APIRouter(
-    prefix="/api",
+    prefix="/chat",
     tags=["chat"],
 )
 
 
-def get_chat_service() -> ChatService:
-    """Construct the chat service from the current application settings."""
-
-    settings = get_settings()
-
-    llm_client = GroqLLMClient(settings)
-
-    return ChatService(
-        llm_client=llm_client,
-        intent_router=IntentRouter(),
-        response_service=ResponseService(),
+def _sse_event(
+    event: str,
+    data: dict[str, object],
+) -> str:
+    return (
+        f"event: {event}\n"
+        f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
     )
+
+conversation_service = ConversationService()
+
+
+def get_customer_context(
+    x_customer_id: str = Header(
+        ...,
+        alias="X-Customer-ID",
+    ),
+) -> CustomerContext:
+    """
+    Build the trusted customer context from the request header.
+
+    Customer identity is taken from X-Customer-ID rather than
+    from free text inside the user's message.
+    """
+
+    try:
+        return CustomerContext(
+            customer_id=x_customer_id,
+        )
+
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid customer ID.",
+        ) from exc
 
 
 @router.post(
-    "/chat",
+    "",
     response_model=ChatResponse,
 )
 def chat(
@@ -45,26 +84,119 @@ def chat(
     customer: CustomerContext = Depends(
         get_customer_context
     ),
-    db=Depends(get_db),
-    service: ChatService = Depends(get_chat_service),
+    db: sqlite3.Connection = Depends(
+        get_db
+    ),
+    settings: Settings = Depends(
+        get_settings
+    ),
 ) -> ChatResponse:
-    """Process a NexaTel customer support message."""
+    """
+    Process one NexaTel customer-support chat request.
+    """
 
     try:
-        return service.process_message(
+        llm_client = GroqLLMClient(
+            settings
+        )
+
+        service = ChatService(
+            llm_client,
+            conversation_service=conversation_service,
+        )
+
+        return service.respond(
             db=db,
             customer=customer,
-            message=request.message,
+            user_message=request.message,
+            conversation_id=request.conversation_id,
         )
 
     except LLMError as exc:
         raise HTTPException(
-            status_code=503,
+            status_code=(
+                status.HTTP_503_SERVICE_UNAVAILABLE
+            ),
             detail=str(exc),
         ) from exc
 
-    except NexaTelError as exc:
+
+@router.post("/stream")
+def chat_stream(
+    request: ChatRequest,
+    customer: CustomerContext = Depends(
+        get_customer_context
+    ),
+    db: sqlite3.Connection = Depends(
+        get_db
+    ),
+    settings: Settings = Depends(
+        get_settings
+    ),
+) -> StreamingResponse:
+    """Stream the final LLM wording after backend processing completes."""
+
+    try:
+        service = ChatService(
+            GroqLLMClient(settings),
+            conversation_service=conversation_service,
+        )
+        metadata, text_stream = service.respond_stream(
+            db=db,
+            customer=customer,
+            user_message=request.message,
+            conversation_id=request.conversation_id,
+        )
+    except LLMError as exc:
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
         ) from exc
+
+    def events() -> Iterator[str]:
+        yield _sse_event(
+            "metadata",
+            metadata.model_dump(mode="json"),
+        )
+
+        try:
+            for text_delta in text_stream:
+                if text_delta:
+                    yield _sse_event(
+                        "delta",
+                        {"text": text_delta},
+                    )
+
+            yield _sse_event("done", {})
+        except LLMError as exc:
+            yield _sse_event(
+                "error",
+                {"message": str(exc)},
+            )
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.post("/reset")
+def reset_conversation(
+    request: ConversationResetRequest,
+    customer: CustomerContext = Depends(
+        get_customer_context
+    ),
+) -> dict[str, str]:
+    """Clear the requesting customer's ephemeral conversation state."""
+
+    conversation_service.clear(
+        request.conversation_id,
+        customer,
+    )
+    return {
+        "status": "cleared"
+    }

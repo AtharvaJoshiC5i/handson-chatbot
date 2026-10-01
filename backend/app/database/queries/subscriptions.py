@@ -32,6 +32,30 @@ def get_current_subscription(
     return cursor.fetchone()
 
 
+def get_latest_subscription(
+    db: sqlite3.Connection,
+    customer_id: str,
+) -> sqlite3.Row | None:
+    """Return the customer's most recently activated subscription."""
+
+    return db.execute(
+        """
+        SELECT
+            subscription_id,
+            customer_id,
+            plan_id,
+            status,
+            activation_date AS start_date,
+            renewal_date
+        FROM subscriptions
+        WHERE customer_id = ?
+        ORDER BY activation_date DESC, subscription_id DESC
+        LIMIT 1
+        """,
+        (customer_id,),
+    ).fetchone()
+
+
 def get_subscription_by_id(
     db: sqlite3.Connection,
     subscription_id: str,

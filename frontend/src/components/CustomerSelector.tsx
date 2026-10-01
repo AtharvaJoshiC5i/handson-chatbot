@@ -30,18 +30,18 @@ export function CustomerSelector({
         disabled={disabled}
         aria-label="Select customer"
         className={[
-          "h-8 min-w-[104px] appearance-none rounded-lg",
-          "border border-[#e1e4e2] bg-white",
+          "h-9 min-w-[116px] appearance-none rounded-md",
+          "border border-[#dce5de] bg-[#fbfcfb]",
           "pl-3 pr-8",
-          "text-[11px] font-medium text-[#3f4845]",
+          "text-[11px] font-semibold tabular-nums text-[#30483c]",
           "outline-none",
           "transition-colors duration-150",
-          "hover:border-[#cbd0cd]",
-          "focus:border-[#b7bdb9]",
-          "focus:ring-2 focus:ring-[#202725]/5",
+          "hover:border-[#b9cbbd] hover:bg-white",
+          "focus:border-[#71927d]",
+          "focus:ring-2 focus:ring-[#2f654f]/10",
           "disabled:cursor-not-allowed",
-          "disabled:bg-[#f6f7f6]",
-          "disabled:text-[#9ba29f]",
+          "disabled:bg-[#f1f4f1]",
+          "disabled:text-[#9ba89f]",
         ].join(" ")}
       >
         {CUSTOMER_IDS.map((id) => (
@@ -57,7 +57,7 @@ export function CustomerSelector({
         aria-hidden="true"
         className={[
           "pointer-events-none absolute right-2.5 top-1/2",
-          "-translate-y-1/2 text-[#858d8a]",
+          "-translate-y-1/2 text-[#788a7e]",
           disabled ? "opacity-40" : "",
         ].join(" ")}
       />

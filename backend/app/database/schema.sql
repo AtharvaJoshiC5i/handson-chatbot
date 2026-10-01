@@ -30,7 +30,10 @@ CREATE TABLE IF NOT EXISTS plans (
     plan_name TEXT NOT NULL UNIQUE,
     monthly_price REAL NOT NULL CHECK (monthly_price >= 0),
     data_limit_gb REAL NOT NULL CHECK (data_limit_gb >= 0),
-    voice_limit_minutes INTEGER NOT NULL CHECK (voice_limit_minutes >= 0),
+    is_data_unlimited INTEGER NOT NULL DEFAULT 0
+        CHECK (is_data_unlimited IN (0, 1)),
+    voice_limit_minutes INTEGER NOT NULL
+        CHECK (voice_limit_minutes >= 0),
     sms_limit INTEGER NOT NULL CHECK (sms_limit >= 0),
     plan_type TEXT NOT NULL
 );

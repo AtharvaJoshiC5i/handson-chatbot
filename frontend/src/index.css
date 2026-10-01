@@ -1,13 +1,20 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap");
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 @import "tailwindcss";
 
 :root {
-  --font-inter: "Inter", ui-sans-serif, system-ui, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-dm-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-ink: #23352e;
+  --color-muted: #74837a;
+  --color-line: #e2e8e3;
+  --color-surface: #ffffff;
+  --color-canvas: #f6f8f5;
+  --color-brand: #173c32;
+  --color-brand-hover: #245344;
+  --color-accent: #d8b96f;
 
-  font-family: var(--font-inter);
-  color: #20282b;
-  background: #f8f9f8;
+  font-family: var(--font-dm-sans);
+  color: var(--color-ink);
+  background: var(--color-canvas);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -16,7 +23,7 @@
 }
 
 @theme inline {
-  --font-sans: var(--font-inter);
+  --font-sans: var(--font-dm-sans);
 }
 
 * {
@@ -39,8 +46,8 @@ body {
   min-width: 320px;
   min-height: 100%;
   overflow: hidden;
-  font-family: var(--font-inter);
-  background: #f8f9f8;
+  font-family: var(--font-dm-sans);
+  background: var(--color-canvas);
 }
 
 button,
@@ -60,7 +67,7 @@ button:disabled {
 
 ::selection {
   color: #ffffff;
-  background: #37413f;
+  background: #285647;
 }
 
 ::-webkit-scrollbar {
@@ -73,14 +80,15 @@ button:disabled {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #d5dad7;
-  border-radius: 999px;
+  background: #cbd6ce;
+  border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #c2c8c5;
+  background: #aebdb2;
 }
 
 .app-shell {
-  background: #f8f9f8;
+  background: var(--color-canvas);
+  letter-spacing: 0;
 }
