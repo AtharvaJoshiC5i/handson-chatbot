@@ -24,6 +24,7 @@ from app.models.domain import (
     DeviceStatus,
     DeviceType,
     Intent,
+    PlanType,
     SupportSortOrder,
     SupportTicketCategory,
     SupportTicketPriority,
@@ -1062,12 +1063,49 @@ def _classify_usage_request(
                 parameters.year = int(year_match.group(1))
 
             if len(filtered_months) > 1:
-                months = [
-                    month_map[match.group(0)]
-                    for match in filtered_months[:2]
-                ]
-                parameters.month = max(months)
-                parameters.comparison_month = min(months)
+                months = sorted(
+                    {
+                        month_map[match.group(0)]
+                        for match in filtered_months[:2]
+                    }
+                )
+                is_range = any(
+                    term in text
+                    for term in (
+                        " from ",
+                        " to ",
+                        " through ",
+                        " until ",
+                        " till ",
+                        " between ",
+                    )
+                )
+                is_compare = any(
+                    term in text
+                    for term in (
+                        "compare",
+                        "comparison",
+                        "versus",
+                        " vs ",
+                        "more than",
+                        "less than",
+                    )
+                )
+                if is_range and not is_compare:
+                    parameters.month_count = (
+                        months[-1] - months[0] + 1
+                    )
+                    parameters.month = None
+                    parameters.comparison_month = None
+                elif is_compare:
+                    parameters.month = months[-1]
+                    parameters.comparison_month = months[0]
+                else:
+                    parameters.month_count = (
+                        months[-1] - months[0] + 1
+                    )
+                    parameters.month = None
+                    parameters.comparison_month = None
 
     if any(term in text for term in data_terms):
         usage_type = UsageType.DATA
@@ -1142,10 +1180,22 @@ def _classify_usage_request(
             parameters=parameters,
         )
 
-    if any(term in text for term in ("history", "each month", "every month")) or parameters.month_count:
+    if (
+        any(
+            term in text
+            for term in (
+                "history",
+                "each month",
+                "every month",
+            )
+        )
+        or parameters.month_count
+    ):
         if usage_type is None:
             return _usage_clarification()
         parameters.usage_type = usage_type
+        parameters.month = None
+        parameters.comparison_month = None
         return LLMIntentResponse(
             intent=Intent.GET_USAGE_HISTORY,
             parameters=parameters,
@@ -1160,6 +1210,12 @@ def _classify_usage_request(
     if usage_type == UsageType.VOICE:
         return LLMIntentResponse(
             intent=Intent.GET_VOICE_USAGE,
+            parameters=parameters,
+        )
+
+    if usage_type == UsageType.SMS:
+        return LLMIntentResponse(
+            intent=Intent.GET_SMS_USAGE,
             parameters=parameters,
         )
 
@@ -1186,6 +1242,53 @@ def _usage_clarification() -> LLMIntentResponse:
     )
 
 
+
+
+def _classify_billing_service_request(
+    text: str,
+) -> LLMIntentResponse | None:
+    if "bill" not in text and "owe" not in text:
+        return None
+    if any(
+        term in text
+        for term in (
+            "phone bill",
+            "mobile bill",
+            "fiber bill",
+            "broadband bill",
+        )
+    ):
+        parameters = IntentParameters()
+        if "fiber" in text or "broadband" in text:
+            parameters.plan_type = PlanType.FIBER
+        else:
+            parameters.plan_type = PlanType.MOBILE
+        return LLMIntentResponse(
+            intent=Intent.GET_CURRENT_BILL,
+            parameters=parameters,
+        )
+    return None
+
+
+def _classify_subscription_inventory(
+    text: str,
+) -> LLMIntentResponse | None:
+    if any(
+        phrase in text
+        for phrase in (
+            "what services",
+            "my services",
+            "list subscriptions",
+            "how many subscriptions",
+            "mobile and fiber",
+        )
+    ):
+        return LLMIntentResponse(
+            intent=Intent.GET_LIST_SUBSCRIPTIONS,
+        )
+    return None
+
+
 def classify_deterministic_request(
     user_message: str,
 ) -> LLMIntentResponse | None:
@@ -1209,6 +1312,20 @@ def classify_deterministic_request(
 
     if payment_help is not None:
         return payment_help
+
+    billing_service = _classify_billing_service_request(
+        text
+    )
+
+    if billing_service is not None:
+        return billing_service
+
+    subscription_inventory = _classify_subscription_inventory(
+        text
+    )
+
+    if subscription_inventory is not None:
+        return subscription_inventory
 
     # Phase 4 outage limitation.
     if any(
@@ -1378,6 +1495,7 @@ class GroqLLMClient:
             ),
         )
 
+        self._settings = settings
         self._model = settings.groq_model
 
         self._timeout = (
@@ -1397,6 +1515,17 @@ class GroqLLMClient:
         )
 
         if deterministic_result is not None:
+            from app.services.response_turn_metrics import (
+                log_intent_llm_usage,
+            )
+
+            log_intent_llm_usage(
+                intent=deterministic_result.intent.value,
+                prompt_tokens=None,
+                completion_tokens=None,
+                total_tokens=None,
+                deterministic=True,
+            )
             return deterministic_result
 
         if (
@@ -1467,7 +1596,23 @@ class GroqLLMClient:
                 if not isinstance(content, str) or not content.strip():
                     raise ValueError("Empty LLM response.")
 
-                return _parse_intent_response(content)
+                parsed = _parse_intent_response(content)
+                from app.services.response_turn_metrics import (
+                    extract_usage_tokens,
+                    log_intent_llm_usage,
+                )
+
+                prompt_t, completion_t, total_t = (
+                    extract_usage_tokens(response)
+                )
+                log_intent_llm_usage(
+                    intent=parsed.intent.value,
+                    prompt_tokens=prompt_t,
+                    completion_tokens=completion_t,
+                    total_tokens=total_t,
+                    deterministic=False,
+                )
+                return parsed
             except Exception:
                 if repair_attempt == 1:
                     break
@@ -1501,6 +1646,8 @@ class GroqLLMClient:
     def generate_response(
         self,
         backend_output: str,
+        *,
+        max_tokens: int | None = None,
     ) -> str:
         """Turn a backend-generated factual answer into customer-facing prose."""
 
@@ -1509,6 +1656,9 @@ class GroqLLMClient:
                 "The backend did not produce an answer to personalize."
             )
 
+        token_cap = max_tokens or (
+            self._settings.response_max_tokens_light
+        )
         response = None
 
         for attempt in range(3):
@@ -1529,8 +1679,8 @@ class GroqLLMClient:
                             },
                         ],
                         model=self._model,
-                        temperature=0.2,
-                        max_tokens=768,
+                        temperature=0.1,
+                        max_tokens=token_cap,
                         timeout=self._timeout,
                     )
                 )
@@ -1559,6 +1709,21 @@ class GroqLLMClient:
             if not isinstance(content, str) or not content.strip():
                 raise ValueError("Empty LLM response.")
 
+            from app.services.response_turn_metrics import (
+                extract_usage_tokens,
+                log_response_rewrite_usage,
+            )
+
+            prompt_t, completion_t, total_t = extract_usage_tokens(
+                response,
+            )
+            log_response_rewrite_usage(
+                prompt_tokens=prompt_t,
+                completion_tokens=completion_t,
+                total_tokens=total_t,
+                max_tokens=token_cap,
+                streamed=False,
+            )
             return content.strip()
         except Exception as exc:
             raise LLMError(
@@ -1568,6 +1733,8 @@ class GroqLLMClient:
     def generate_response_stream(
         self,
         backend_output: str,
+        *,
+        max_tokens: int | None = None,
     ) -> Iterator[str]:
         """Yield final-answer text deltas for verified backend output."""
 
@@ -1576,6 +1743,9 @@ class GroqLLMClient:
                 "The backend did not produce an answer to personalize."
             )
 
+        token_cap = max_tokens or (
+            self._settings.response_max_tokens_light
+        )
         stream = None
 
         for attempt in range(3):
@@ -1596,8 +1766,8 @@ class GroqLLMClient:
                             },
                         ],
                         model=self._model,
-                        temperature=0.2,
-                        max_tokens=768,
+                        temperature=0.1,
+                        max_tokens=token_cap,
                         timeout=self._timeout,
                         stream=True,
                     )
@@ -1630,6 +1800,23 @@ class GroqLLMClient:
                 content = chunk.choices[0].delta.content
                 if isinstance(content, str) and content:
                     yield content
+
+                if getattr(chunk, "usage", None) is not None:
+                    from app.services.response_turn_metrics import (
+                        extract_usage_tokens,
+                        log_response_rewrite_usage,
+                    )
+
+                    prompt_t, completion_t, total_t = (
+                        extract_usage_tokens(chunk)
+                    )
+                    log_response_rewrite_usage(
+                        prompt_tokens=prompt_t,
+                        completion_tokens=completion_t,
+                        total_tokens=total_t,
+                        max_tokens=token_cap,
+                        streamed=True,
+                    )
         except Exception as exc:
             raise LLMError(
                 "The language model response stream was interrupted."

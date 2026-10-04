@@ -36,11 +36,130 @@ class ConversationResetRequest(BaseModel):
 
 
 class CustomerProfileResponse(BaseModel):
-    """Minimal profile data for the authenticated selected customer."""
+    """Profile data for the authenticated selected customer."""
 
     model_config = ConfigDict(extra="forbid")
 
     name: str
+    phone_masked: str
+    city: str
+    service_address_line: str
+    account_status: str
+
+
+class DemoCustomerItem(BaseModel):
+    """One demo account for the account switcher."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    customer_id: str
+    name: str
+    phone_masked: str
+
+
+class DemoCustomersResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    customers: list[DemoCustomerItem]
+
+
+class SnapshotPlanSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plan_name: str
+    plan_type: str
+    renewal_date: str
+    data_limit_gb: float
+    is_data_unlimited: bool
+
+
+class SnapshotBillSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    bill_id: str
+    amount: float
+    due_date: str
+    status: str
+    plan_type: str
+
+
+class SnapshotPaymentSummary(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: str
+    failure_reason: str | None = None
+
+
+class SnapshotPaymentProfile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    autopay_enabled: bool
+    payment_method_label: str
+
+
+class SnapshotSubscriptionItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    subscription_id: str
+    plan_name: str
+    plan_type: str
+    status: str
+    renewal_date: str
+    monthly_price: float
+
+
+class SnapshotAttentionItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    domain: str
+    severity: str
+    message: str
+    prompt: str | None = None
+
+
+class SnapshotBillByLine(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    plan_type: str
+    plan_name: str
+    bill_id: str
+    amount: float
+    due_date: str
+    status: str
+
+
+class SnapshotProjectedBill(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    estimated_amount: float
+    plan_name: str
+    plan_type: str
+    as_of_date: str
+
+
+class AccountSnapshotResponse(BaseModel):
+    """Aggregated read-only account context for the chat shell."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    customer_id: str
+    name: str
+    phone_masked: str
+    city: str
+    service_address_line: str
+    account_status: str
+    plan: SnapshotPlanSummary | None = None
+    usage_headline: str | None = None
+    bill: SnapshotBillSummary | None = None
+    bills_by_line: list[SnapshotBillByLine] = []
+    payment: SnapshotPaymentSummary | None = None
+    payment_profile: SnapshotPaymentProfile | None = None
+    has_payment_profile: bool = False
+    projected_bill: SnapshotProjectedBill | None = None
+    available_credits: float
+    active_subscriptions: list[SnapshotSubscriptionItem]
+    attention_items: list[SnapshotAttentionItem]
+    generated_at: str
 
 
 class ChatOption(BaseModel):

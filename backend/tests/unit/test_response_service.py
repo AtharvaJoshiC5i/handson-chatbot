@@ -33,6 +33,10 @@ def test_generate_response_sends_only_backend_output_to_llm() -> None:
 	)
 	client._model = "test-model"
 	client._timeout = 1
+	client._settings = SimpleNamespace(
+		response_max_tokens_light=192,
+		response_max_tokens_full=384,
+	)
 
 	answer = client.generate_response(
 		"Your plan is currently active."
@@ -59,7 +63,12 @@ def test_chat_service_uses_llm_answer_for_verified_and_clarification_results() -
 		def __init__(self) -> None:
 			self.received = []
 
-		def generate_response(self, backend_output: str) -> str:
+		def generate_response(
+			self,
+			backend_output: str,
+			*,
+			max_tokens: int | None = None,
+		) -> str:
 			self.received.append(backend_output)
 			return f"Personalized answer: {backend_output}"
 
@@ -88,11 +97,10 @@ def test_chat_service_uses_llm_answer_for_verified_and_clarification_results() -
 
 	assert client.received == [
 		"Your plan is active.",
-		"Which bill would you like me to check?",
 	]
 	assert [response.message for response in responses] == [
 		"Personalized answer: Your plan is active.",
-		"Personalized answer: Which bill would you like me to check?",
+		"Which bill would you like me to check?",
 	]
 	assert [response.status for response in responses] == [
 		"VERIFIED",
@@ -132,8 +140,17 @@ def test_generate_response_stream_yields_text_deltas() -> None:
 	)
 	client._model = "test-model"
 	client._timeout = 1
+	client._settings = SimpleNamespace(
+		response_max_tokens_light=192,
+		response_max_tokens_full=384,
+	)
 
-	assert list(client.generate_response_stream("Plan: active.")) == [
+	assert list(
+		client.generate_response_stream(
+			"Plan: active.",
+			max_tokens=192,
+		),
+	) == [
 		"Your plan ",
 		"is active.",
 	]

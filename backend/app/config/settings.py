@@ -48,6 +48,29 @@ class Settings(BaseSettings):
         alias="LLM_TIMEOUT_SECONDS",
     )
 
+    response_llm_mode: str = Field(
+        default="auto",
+        alias="RESPONSE_LLM_MODE",
+        description=(
+            "auto|light: skip Groq rewrite when structured "
+            "presentation exists; off: never rewrite; full: always rewrite"
+        ),
+    )
+
+    response_max_tokens_light: int = Field(
+        default=192,
+        alias="RESPONSE_MAX_TOKENS",
+        ge=32,
+        le=768,
+    )
+
+    response_max_tokens_full: int = Field(
+        default=384,
+        alias="RESPONSE_MAX_TOKENS_FULL",
+        ge=64,
+        le=768,
+    )
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

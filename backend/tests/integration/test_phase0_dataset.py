@@ -14,7 +14,10 @@ TABLES = {
     "bill_items",
     "payments",
     "support_tickets",
+    "support_ticket_updates",
     "devices",
+    "customer_payment_profiles",
+    "account_credits",
 }
 
 
@@ -276,7 +279,7 @@ def test_primary_demo_customers_have_historical_coverage():
             (customer_id,),
         ).fetchone()[0]
 
-        assert usage_months >= 6
+        assert usage_months >= 12
 
         bill_count = db.execute(
             """
@@ -287,4 +290,4 @@ def test_primary_demo_customers_have_historical_coverage():
             (customer_id,),
         ).fetchone()[0]
 
-        assert bill_count >= 6
+        assert bill_count >= 12

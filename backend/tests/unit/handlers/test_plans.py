@@ -36,7 +36,9 @@ def test_get_plan_renewal_returns_verified_date():
         )
 
         assert result.status == TruthStatus.VERIFIED
-        assert result.data["renewal_date"] == "2026-10-10"
+        assert result.data["result_type"] == "PLAN_RENEWAL"
+        assert result.data["plan_name"] == "NexaMax 799"
+        assert result.data["renewal_date"] == "2026-10-15"
 
     finally:
         db.close()

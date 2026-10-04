@@ -11,6 +11,7 @@ import {
 } from "recharts";
 
 import type { TimeSeriesPresentation } from "../types/chat";
+import { presentationShell } from "../lib/presentationStyles";
 
 interface TimeSeriesChartProps {
   presentation: TimeSeriesPresentation;
@@ -51,9 +52,9 @@ export function TimeSeriesChart({
   const chartData = presentation.points;
 
   return (
-    <section className="overflow-hidden rounded-lg border border-[#dfe7e0] bg-white shadow-[0_1px_4px_rgba(23,60,50,0.03)]">
+    <section className={presentationShell}>
       {presentation.title && (
-        <h3 className="border-b border-[#e8ede9] px-4 py-3 text-[12px] font-semibold text-[#30493b]">
+        <h3 className="border-b border-line px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted">
           {presentation.title}
         </h3>
       )}
@@ -65,17 +66,17 @@ export function TimeSeriesChart({
         <ResponsiveContainer width="100%" height="100%">
           {presentation.chart_type === "line" ? (
             <LineChart data={chartData} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-              <CartesianGrid stroke="#e8eee9" strokeDasharray="3 4" vertical={false} />
+              <CartesianGrid stroke="#e7e5e4" strokeDasharray="3 4" vertical={false} />
               <XAxis
                 dataKey="period"
-                tick={{ fill: "#728177", fontSize: 10 }}
-                axisLine={{ stroke: "#dfe7e0" }}
+                tick={{ fill: "#78716c", fontSize: 10 }}
+                axisLine={{ stroke: "#e7e5e4" }}
                 tickLine={false}
                 minTickGap={16}
               />
               <YAxis
                 width={56}
-                tick={{ fill: "#829087", fontSize: 10 }}
+                tick={{ fill: "#78716c", fontSize: 10 }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(value: number) => formatAxisValue(value, presentation)}
@@ -83,36 +84,36 @@ export function TimeSeriesChart({
               <Tooltip
                 formatter={(value) => formatSeriesValue(Number(value), presentation)}
                 contentStyle={{
-                  border: "1px solid #dfe7e0",
+                  border: "1px solid #e7e5e4",
                   borderRadius: 8,
-                  color: "#2c4135",
+                  color: "#1c1917",
                   fontSize: 12,
-                  boxShadow: "0 4px 14px rgba(23,60,50,0.08)",
+                  boxShadow: "0 4px 14px rgb(28 25 23 / 0.08)",
                 }}
               />
               <Line
                 type="monotone"
                 dataKey="value"
                 name={presentation.unit}
-                stroke="#347052"
+                stroke="#0f766e"
                 strokeWidth={2.5}
-                activeDot={{ r: 5, fill: "#d3a451", stroke: "#ffffff", strokeWidth: 2 }}
-                dot={{ r: 3, fill: "#347052", stroke: "#ffffff", strokeWidth: 1.5 }}
+                activeDot={{ r: 5, fill: "#d97706", stroke: "#ffffff", strokeWidth: 2 }}
+                dot={{ r: 3, fill: "#0f766e", stroke: "#ffffff", strokeWidth: 1.5 }}
               />
             </LineChart>
           ) : (
             <BarChart data={chartData} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-              <CartesianGrid stroke="#e8eee9" strokeDasharray="3 4" vertical={false} />
+              <CartesianGrid stroke="#e7e5e4" strokeDasharray="3 4" vertical={false} />
               <XAxis
                 dataKey="period"
-                tick={{ fill: "#728177", fontSize: 10 }}
-                axisLine={{ stroke: "#dfe7e0" }}
+                tick={{ fill: "#78716c", fontSize: 10 }}
+                axisLine={{ stroke: "#e7e5e4" }}
                 tickLine={false}
                 minTickGap={16}
               />
               <YAxis
                 width={56}
-                tick={{ fill: "#829087", fontSize: 10 }}
+                tick={{ fill: "#78716c", fontSize: 10 }}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(value: number) => formatAxisValue(value, presentation)}
@@ -120,17 +121,17 @@ export function TimeSeriesChart({
               <Tooltip
                 formatter={(value) => formatSeriesValue(Number(value), presentation)}
                 contentStyle={{
-                  border: "1px solid #dfe7e0",
+                  border: "1px solid #e7e5e4",
                   borderRadius: 8,
-                  color: "#2c4135",
+                  color: "#1c1917",
                   fontSize: 12,
-                  boxShadow: "0 4px 14px rgba(23,60,50,0.08)",
+                  boxShadow: "0 4px 14px rgb(28 25 23 / 0.08)",
                 }}
               />
               <Bar
                 dataKey="value"
                 name="Bill amount"
-                fill="#347052"
+                fill="#0f766e"
                 radius={[4, 4, 0, 0]}
                 maxBarSize={40}
               />
@@ -138,18 +139,18 @@ export function TimeSeriesChart({
           )}
         </ResponsiveContainer>
       </div>
-      <div className="border-t border-[#e8ede9]">
+      <div className="border-t border-line">
         {presentation.points.map((point, index) => (
           <div
             key={`${point.period}-${index}`}
-            className="grid grid-cols-[minmax(0,1fr)_minmax(0,auto)_minmax(0,auto)] items-center gap-3 border-b border-[#edf1ed] px-4 py-2.5 last:border-b-0"
+            className="grid grid-cols-[minmax(0,1fr)_minmax(0,auto)_minmax(0,auto)] items-center gap-3 border-b border-line px-4 py-2.5 last:border-b-0"
           >
-            <span className="min-w-0 truncate text-[11px] text-[#728177]">{point.period}</span>
-            <span className="text-right text-[11px] font-semibold tabular-nums text-[#2c4135]">
+            <span className="min-w-0 truncate text-[11px] text-muted">{point.period}</span>
+            <span className="text-right text-[11px] font-semibold tabular-nums text-ink">
               {formatSeriesValue(point.value, presentation)}
             </span>
             {point.detail && (
-              <span className="text-right text-[10px] text-[#7d8b81]">{point.detail}</span>
+              <span className="text-right text-[10px] text-muted">{point.detail}</span>
             )}
           </div>
         ))}

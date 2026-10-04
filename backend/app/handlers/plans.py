@@ -107,9 +107,31 @@ def get_plan_renewal(
             message="No active subscription was found.",
         )
 
+    try:
+        plan = get_plan_by_id(
+            db,
+            plan_id=subscription["plan_id"],
+        )
+    except sqlite3.Error:
+        return database_error_result(
+            message="Unable to retrieve your plan information.",
+        )
+
+    if plan is None:
+        return not_found_result(
+            source=source_for_table("plans"),
+            message=(
+                "The plan associated with your subscription "
+                "was not found."
+            ),
+        )
+
     data = {
+        "result_type": "PLAN_RENEWAL",
         "subscription_id": subscription["subscription_id"],
         "plan_id": subscription["plan_id"],
+        "plan_name": plan["name"],
+        "plan_type": plan["plan_type"],
         "renewal_date": subscription["renewal_date"],
         "subscription_status": subscription["status"],
     }

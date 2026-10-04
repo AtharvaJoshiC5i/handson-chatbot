@@ -15,6 +15,8 @@ def get_customer_360_records(
     statements = {
         "customer": """
             SELECT customer_id, name, email, phone_number, city,
+                   service_address_line, service_state,
+                   service_postal_code,
                    account_status, registration_date
             FROM customers
             WHERE customer_id = ?
@@ -43,8 +45,9 @@ def get_customer_360_records(
             ORDER BY usage_date DESC, usage_id DESC
         """,
         "bills": """
-            SELECT bill_id, customer_id, billing_period_start,
-                   billing_period_end, amount, due_date, status
+            SELECT bill_id, customer_id, subscription_id,
+                   billing_period_start, billing_period_end,
+                   amount, due_date, status
             FROM bills
             WHERE customer_id = ?
             ORDER BY billing_period_end DESC, bill_id DESC
@@ -60,14 +63,15 @@ def get_customer_360_records(
         "payments": """
             SELECT payment_id, bill_id, customer_id, amount,
                    payment_date, payment_method, status,
-                   transaction_reference
+                   transaction_reference, failure_reason
             FROM payments
             WHERE customer_id = ?
             ORDER BY payment_date DESC, payment_id DESC
         """,
         "support_tickets": """
             SELECT ticket_id, customer_id, category, description,
-                   status, priority, created_at, updated_at
+                   status, priority, created_at, updated_at,
+                   related_bill_id, related_payment_id
             FROM support_tickets
             WHERE customer_id = ?
             ORDER BY created_at DESC, ticket_id DESC

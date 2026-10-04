@@ -45,6 +45,10 @@ def get_account_status(
         "name": row["name"],
         "email": row["email"],
         "phone": row["phone"],
+        "city": row["city"],
+        "service_address_line": row["service_address_line"],
+        "service_state": row["service_state"],
+        "service_postal_code": row["service_postal_code"],
         "account_status": row["account_status"],
         "created_at": row["created_at"],
     }

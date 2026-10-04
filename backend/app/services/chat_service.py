@@ -6,23 +6,32 @@ import sqlite3
 from collections.abc import Iterator
 from uuid import uuid4
 
+from app.config.settings import get_settings
 from app.llm.client import GroqLLMClient
 from app.llm.extractor import IntentExtractor
 from app.models.api import (
     ChatOption,
+    ChatPresentation,
     ChatResponse,
 )
 from app.models.domain import (
     CustomerContext,
 )
-from app.services.presentation_service import (
-    PresentationService,
-)
 from app.services.conversation_service import (
     ConversationService,
 )
+from app.services.presentation_service import (
+    PresentationService,
+)
+from app.services.response_narrative_policy import (
+    rewrite_max_tokens,
+    should_skip_response_rewrite,
+)
 from app.services.response_service import (
     ResponseService,
+)
+from app.services.response_turn_metrics import (
+    log_response_turn,
 )
 from app.services.structured_data_service import (
     StructuredDataService,
@@ -32,6 +41,19 @@ from app.utils.errors import LLMError
 
 
 _DEFAULT_CONVERSATION_SERVICE = ConversationService()
+
+
+def _result_type_from_truth(
+    truth_result: TruthResult,
+) -> str | None:
+    data = truth_result.data
+
+    if not isinstance(data, dict):
+        return None
+
+    result_type = data.get("result_type")
+
+    return result_type if isinstance(result_type, str) else None
 
 
 class ChatService:
@@ -92,7 +114,7 @@ class ChatService:
         and optional structured presentation.
         """
 
-        truth_result, options = self._process_turn(
+        truth_result, options, intent_name = self._process_turn(
             db=db,
             customer=customer,
             user_message=user_message,
@@ -102,6 +124,7 @@ class ChatService:
         return self._build_chat_response(
             truth_result=truth_result,
             options=options,
+            intent_name=intent_name,
         )
 
     def respond_stream(
@@ -114,20 +137,32 @@ class ChatService:
     ) -> tuple[ChatResponse, Iterator[str]]:
         """Resolve a turn on the backend and stream only its final wording."""
 
-        truth_result, options = self._process_turn(
+        truth_result, options, intent_name = self._process_turn(
             db=db,
             customer=customer,
             user_message=user_message,
             conversation_id=conversation_id,
         )
-        backend_output = self._response_service.build_response(
-            truth_result
+        backend_output, presentation, skip_rewrite = (
+            self._prepare_narrative(
+                truth_result=truth_result,
+                intent_name=intent_name,
+            )
         )
         metadata = self._build_chat_response(
             truth_result=truth_result,
             options=options,
-            message_override="",
+            intent_name=intent_name,
+            message_override=backend_output
+            if skip_rewrite
+            else "",
+            presentation=presentation,
+            skip_rewrite=skip_rewrite,
+            backend_output=backend_output,
         )
+
+        if skip_rewrite:
+            return metadata, iter((backend_output,))
 
         generate_response_stream = getattr(
             self._llm_client,
@@ -135,7 +170,14 @@ class ChatService:
             None,
         )
         if callable(generate_response_stream):
-            text_stream = generate_response_stream(backend_output)
+            token_cap = rewrite_max_tokens(
+                get_settings(),
+                has_presentation=presentation is not None,
+            )
+            text_stream = generate_response_stream(
+                backend_output,
+                max_tokens=token_cap,
+            )
 
             def stream_with_backend_fallback() -> Iterator[str]:
                 received_text = False
@@ -156,8 +198,15 @@ class ChatService:
             None,
         )
         try:
+            token_cap = rewrite_max_tokens(
+                get_settings(),
+                has_presentation=presentation is not None,
+            )
             final_message = (
-                generate_response(backend_output)
+                generate_response(
+                    backend_output,
+                    max_tokens=token_cap,
+                )
                 if callable(generate_response)
                 else backend_output
             )
@@ -173,7 +222,7 @@ class ChatService:
         customer: CustomerContext,
         user_message: str,
         conversation_id: str | None,
-    ) -> tuple[TruthResult, list[ChatOption]]:
+    ) -> tuple[TruthResult, list[ChatOption], str | None]:
         conversation_id = conversation_id or uuid4().hex
         context = self._conversation_service.get_context(
             conversation_id,
@@ -198,43 +247,101 @@ class ChatService:
             )
             for option in intent_response.options
         ]
-        return truth_result, options
+        intent_name = intent_response.intent.value
+        return truth_result, options, intent_name
+
+    def _prepare_narrative(
+        self,
+        *,
+        truth_result: TruthResult,
+        intent_name: str | None,
+    ) -> tuple[str, ChatPresentation | None, bool]:
+        backend_output = (
+            self._response_service.build_response(
+                truth_result,
+            )
+        )
+        presentation = (
+            self._presentation_service.build(
+                truth_result,
+            )
+        )
+        settings = get_settings()
+        skip_rewrite = should_skip_response_rewrite(
+            truth_result.status,
+            presentation,
+            settings.response_llm_mode,
+        )
+        presentation_type = (
+            presentation.type
+            if presentation is not None
+            else None
+        )
+
+        log_response_turn(
+            intent=intent_name,
+            status=truth_result.status.value,
+            result_type=_result_type_from_truth(
+                truth_result,
+            ),
+            backend_output_chars=len(
+                backend_output,
+            ),
+            presentation_type=presentation_type,
+            rewrite_skipped=skip_rewrite,
+            response_llm_mode=settings.response_llm_mode,
+        )
+
+        return backend_output, presentation, skip_rewrite
 
     def _build_chat_response(
         self,
         *,
         truth_result: TruthResult,
         options: list[ChatOption],
+        intent_name: str | None = None,
         message_override: str | None = None,
+        presentation: ChatPresentation | None = None,
+        skip_rewrite: bool | None = None,
+        backend_output: str | None = None,
     ) -> ChatResponse:
-        backend_output = (
-            self._response_service
-            .build_response(
-                truth_result
+        if backend_output is None or presentation is None or skip_rewrite is None:
+            backend_output, presentation, skip_rewrite = (
+                self._prepare_narrative(
+                    truth_result=truth_result,
+                    intent_name=intent_name,
+                )
             )
-        )
+
         generate_response = getattr(
             self._llm_client,
             "generate_response",
             None,
         )
         message = message_override
-        if message is None:
-            try:
-                message = (
-                    generate_response(backend_output)
-                    if callable(generate_response)
-                    else backend_output
-                )
-            except LLMError:
-                message = backend_output
 
-        presentation = (
-            self._presentation_service
-            .build(
-                truth_result
-            )
-        )
+        if message is None:
+            if skip_rewrite:
+                message = backend_output
+            else:
+                try:
+                    token_cap = rewrite_max_tokens(
+                        get_settings(),
+                        has_presentation=presentation is not None,
+                    )
+                    message = (
+                        generate_response(
+                            backend_output,
+                            max_tokens=token_cap,
+                        )
+                        if callable(generate_response)
+                        else backend_output
+                    )
+                except LLMError:
+                    message = backend_output
+
+        if not (message or "").strip():
+            message = backend_output
 
         source = None
 

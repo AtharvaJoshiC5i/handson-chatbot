@@ -18,6 +18,10 @@ def get_customer(
             name,
             email,
             phone_number AS phone,
+            city,
+            service_address_line,
+            service_state,
+            service_postal_code,
             account_status,
             registration_date AS created_at
         FROM customers
@@ -27,3 +31,22 @@ def get_customer(
     )
 
     return cursor.fetchone()
+
+
+def list_demo_customers(
+    db: sqlite3.Connection,
+) -> list[sqlite3.Row]:
+    """Return demo customers for the account switcher."""
+
+    cursor = db.execute(
+        """
+        SELECT
+            customer_id,
+            name,
+            phone_number AS phone
+        FROM customers
+        ORDER BY customer_id ASC
+        """,
+    )
+
+    return cursor.fetchall()

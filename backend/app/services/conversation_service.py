@@ -579,6 +579,26 @@ class ConversationService:
         ):
             return direct
 
+        if active == "usage" and any(
+            phrase in text
+            for phrase in (
+                "how much is left",
+                "how much do i have left",
+                "what is left",
+                "what's left",
+            )
+        ):
+            params.usage_type = UsageType(
+                context.usage_type
+                or UsageType.DATA.value
+            )
+            if "last month" in text:
+                params.time_range = TimeRange.LAST_MONTH
+            return LLMIntentResponse(
+                intent=Intent.GET_USAGE_REMAINING,
+                parameters=params,
+            )
+
         if direct is not None and not (
             context.last_intent is not None
             and is_reference
@@ -728,8 +748,13 @@ class ConversationService:
                 else:
                     params.month = month
                     params.year = year
+                followup_usage_intent = Intent.GET_DATA_USAGE
+                if context.usage_type == UsageType.VOICE.value:
+                    followup_usage_intent = Intent.GET_VOICE_USAGE
+                elif context.usage_type == UsageType.SMS.value:
+                    followup_usage_intent = Intent.GET_SMS_USAGE
                 return LLMIntentResponse(
-                    intent=Intent.GET_DATA_USAGE,
+                    intent=followup_usage_intent,
                     parameters=params,
                 )
 

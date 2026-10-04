@@ -13,6 +13,7 @@ A read-only telecom customer-support chatbot. The backend scopes every lookup to
 - **Combined answers:** plan/usage, bill/payment, support/billing, account-attention, and customer-overview questions.
 - **Visualizations:** usage history/trends render as line charts; bill history renders as bars and bill trends as lines. Exact values remain listed below each chart. Short histories fall back to tables.
 - **Personalized welcome:** the selected customer name is loaded from the customer record and shown on the landing page.
+- **Account overview:** a read-only **Account** workspace tab shows the same `/chat/account-snapshot` data as the chat shell (plan, usage, bill, subscriptions, attention) for the selected customer.
 
 The assistant is read-only. It cannot change plans, make payments, open support tickets, or perform live network/device diagnostics. Ambiguous questions should be clarified rather than guessed. The full question guide is in [QUESTIONS.md](QUESTIONS.md).
 

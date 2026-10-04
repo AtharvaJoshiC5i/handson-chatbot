@@ -96,7 +96,12 @@ def test_named_month_usage_questions_are_classified_without_llm() -> None:
 
 def test_chat_response_falls_back_to_backend_text_if_final_llm_fails() -> None:
     class FailingResponseClient:
-        def generate_response(self, _backend_output: str) -> str:
+        def generate_response(
+            self,
+            _backend_output: str,
+            *,
+            max_tokens: int | None = None,
+        ) -> str:
             raise LLMError("temporary prose-generation failure")
 
     service = ChatService(FailingResponseClient())
@@ -118,7 +123,12 @@ def test_chat_response_falls_back_to_backend_text_if_final_llm_fails() -> None:
 
 def test_stream_falls_back_if_final_llm_fails_before_first_delta() -> None:
     class FailingStreamClient:
-        def generate_response_stream(self, _backend_output: str):
+        def generate_response_stream(
+            self,
+            _backend_output: str,
+            *,
+            max_tokens: int | None = None,
+        ):
             def failed_stream():
                 raise LLMError("temporary stream failure")
                 yield ""
@@ -132,7 +142,11 @@ def test_stream_falls_back_if_final_llm_fails_before_first_delta() -> None:
         source=DATABASE_SOURCE,
         message="Your account is active.",
     )
-    service._process_turn = lambda **_kwargs: (result, [])
+    service._process_turn = lambda **_kwargs: (
+        result,
+        [],
+        None,
+    )
 
     _, text_stream = service.respond_stream(
         db=None,

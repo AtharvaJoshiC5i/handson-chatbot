@@ -106,7 +106,12 @@ PHASE1_USAGE_EVALUATION_QUESTIONS = [
     # ========================================================
     {
         "question": "How many SMS have I sent?",
-        "intent": "GET_USAGE_SUMMARY",
+        "intent": "GET_SMS_USAGE",
+        "usage_type": None,
+    },
+    {
+        "question": "Show my SMS usage this month.",
+        "intent": "GET_SMS_USAGE",
         "usage_type": None,
     },
     {

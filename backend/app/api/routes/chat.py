@@ -20,13 +20,22 @@ from app.config.settings import (
     get_settings,
 )
 from app.database.connection import get_db
-from app.database.queries.customers import get_customer
+from app.database.queries.customers import (
+    get_customer,
+    list_demo_customers,
+)
+from app.services.account_snapshot_service import (
+    build_account_snapshot,
+)
 from app.llm.client import GroqLLMClient
 from app.models.api import (
+    AccountSnapshotResponse,
     ChatRequest,
     ChatResponse,
-    CustomerProfileResponse,
     ConversationResetRequest,
+    CustomerProfileResponse,
+    DemoCustomerItem,
+    DemoCustomersResponse,
 )
 from app.models.domain import CustomerContext
 from app.services.chat_service import ChatService
@@ -108,8 +117,98 @@ def get_selected_customer_profile(
             detail="Customer account was not found.",
         )
 
+    phone = row["phone"]
+    phone_masked = (
+        f"{phone[:-4]}****"
+        if len(phone) >= 4
+        else phone
+    )
+
     return CustomerProfileResponse(
         name=row["name"],
+        phone_masked=phone_masked,
+        city=row["city"],
+        service_address_line=row[
+            "service_address_line"
+        ]
+        if "service_address_line" in row.keys()
+        else "",
+        account_status=row["account_status"],
+    )
+
+
+def _mask_phone(phone: str) -> str:
+    if len(phone) < 4:
+        return phone
+    return f"{phone[:-4]}****"
+
+
+@router.get(
+    "/demo-customers",
+    response_model=DemoCustomersResponse,
+)
+def get_demo_customers(
+    db: sqlite3.Connection = Depends(
+        get_db
+    ),
+) -> DemoCustomersResponse:
+    """List demo accounts for the frontend account switcher."""
+
+    try:
+        rows = list_demo_customers(db)
+    except sqlite3.Error as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Demo customers are unavailable.",
+        ) from exc
+
+    return DemoCustomersResponse(
+        customers=[
+            DemoCustomerItem(
+                customer_id=row["customer_id"],
+                name=row["name"],
+                phone_masked=_mask_phone(
+                    row["phone"],
+                ),
+            )
+            for row in rows
+        ],
+    )
+
+
+@router.get(
+    "/account-snapshot",
+    response_model=AccountSnapshotResponse,
+)
+def get_account_snapshot(
+    customer: CustomerContext = Depends(
+        get_customer_context
+    ),
+    db: sqlite3.Connection = Depends(
+        get_db
+    ),
+) -> AccountSnapshotResponse:
+    """Return aggregated account context for personalization."""
+
+    try:
+        snapshot = build_account_snapshot(
+            db,
+            customer.customer_id,
+        )
+    except sqlite3.Error as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Account snapshot is unavailable.",
+        ) from exc
+
+    if snapshot is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Customer account was not found.",
+        )
+
+    return AccountSnapshotResponse.model_validate(
+        snapshot,
     )
 
 

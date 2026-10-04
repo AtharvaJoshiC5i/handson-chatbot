@@ -10,8 +10,10 @@ from pydantic import (
 
 from app.models.domain import (
     BillExtremeType,
+    BillItemType,
     BillSortOrder,
     BillStatus,
+    PlanType,
     DeviceExtremeType,
     DeviceSortOrder,
     DeviceStatus,
@@ -138,6 +140,22 @@ class IntentParameters(BaseModel):
 
     sort_order: (
         BillSortOrder | None
+    ) = None
+
+    plan_type: (
+        PlanType | None
+    ) = None
+
+    plan_id: (
+        str | None
+    ) = None
+
+    comparison_plan_id: (
+        str | None
+    ) = None
+
+    bill_item_type: (
+        BillItemType | None
     ) = None
 
     # Phase 3 — payments.

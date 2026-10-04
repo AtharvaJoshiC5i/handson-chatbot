@@ -1,15 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
-  ArrowUpRight,
-  ChartNoAxesColumnIncreasing,
   CircleAlert,
-  CircleHelp,
-  CreditCard,
-  Headphones,
+  Database,
+  LayoutDashboard,
   MessagesSquare,
   Plus,
-  ReceiptText,
   Signal,
   UserRound,
 } from "lucide-react";
@@ -17,44 +13,25 @@ import {
 import { ChatWindow } from "./components/ChatWindow";
 import { CustomerSelector } from "./components/CustomerSelector";
 import { MessageInput } from "./components/MessageInput";
+import { WelcomePanel } from "./components/WelcomePanel";
+import { AccountOverviewPage } from "./pages/AccountOverviewPage";
+import { DatabaseExplorerPage } from "./pages/DatabaseExplorerPage";
 import {
-  getCustomerName,
+  getAccountSnapshot,
+  getCustomerProfile,
+  getDemoCustomers,
   resetConversationContext,
   streamChatMessage,
 } from "./services/api";
 
+import type {
+  AccountSnapshot,
+  CustomerProfile,
+  DemoCustomer,
+} from "./types/account";
 import type { ChatMessage } from "./types/chat";
 
-const starterPrompts = [
-  {
-    title: "Your plan",
-    description: "See the plan and features on your account",
-    prompt: "Check my current plan",
-    icon: CreditCard,
-    tone: "bg-[#e8f1eb] text-[#28624c]",
-  },
-  {
-    title: "Data & usage",
-    description: "Review your usage for this cycle",
-    prompt: "Review my data usage",
-    icon: ChartNoAxesColumnIncreasing,
-    tone: "bg-[#eff1e8] text-[#586c35]",
-  },
-  {
-    title: "Latest bill",
-    description: "Find a charge or check your bill details",
-    prompt: "Show my latest bill",
-    icon: ReceiptText,
-    tone: "bg-[#f5eee5] text-[#95652d]",
-  },
-  {
-    title: "Payment support",
-    description: "Get help with a payment or payment method",
-    prompt: "Help with a payment",
-    icon: CircleHelp,
-    tone: "bg-[#eaf0f1] text-[#426578]",
-  },
-];
+type AppPage = "support" | "account" | "database";
 
 function createMessageId(): string {
   return `${Date.now()}-${Math.random()
@@ -67,88 +44,78 @@ function createConversationId(): string {
     ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function headerTitle(appPage: AppPage): string {
+  if (appPage === "account") {
+    return "Account overview";
+  }
+
+  return "Account support";
+}
+
 export default function App() {
-  const [
-    customerId,
-    setCustomerId,
-  ] = useState(
-    "CUST001",
-  );
-
-  const [
-    conversationId,
-    setConversationId,
-  ] = useState(
-    createConversationId,
-  );
-
-  const [
-    messages,
-    setMessages,
-  ] = useState<
-    ChatMessage[]
-  >([]);
-
-  const [
-    loading,
-    setLoading,
-  ] = useState(
-    false,
-  );
-
-  const [
-    error,
-    setError,
-  ] = useState<
-    string | null
-  >(null);
+  const [appPage, setAppPage] = useState<AppPage>("support");
+  const [customerId, setCustomerId] = useState("CUST001");
+  const [conversationId, setConversationId] = useState(createConversationId);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [profile, setProfile] = useState<CustomerProfile | null>(null);
+  const [snapshot, setSnapshot] = useState<AccountSnapshot | null>(null);
+  const [snapshotLoading, setSnapshotLoading] = useState(true);
+  const [demoCustomers, setDemoCustomers] = useState<DemoCustomer[]>([]);
 
   const abortControllerRef = useRef<AbortController | null>(null);
-  const [customerProfile, setCustomerProfile] = useState<{
-    customerId: string;
-    name: string;
-  } | null>(null);
-  const customerName =
-    customerProfile?.customerId === customerId
-      ? customerProfile.name
-      : null;
 
   useEffect(() => {
     const controller = new AbortController();
 
-    void getCustomerName(customerId, controller.signal)
-      .then((name) => setCustomerProfile({ customerId, name }))
+    setSnapshotLoading(true);
+
+    void Promise.all([
+      getCustomerProfile(customerId, controller.signal),
+      getAccountSnapshot(customerId, controller.signal),
+    ])
+      .then(([nextProfile, nextSnapshot]) => {
+        setProfile(nextProfile);
+        setSnapshot(nextSnapshot);
+      })
       .catch((profileError: unknown) => {
         if (
-          profileError instanceof DOMException &&
-          profileError.name === "AbortError"
+          profileError instanceof DOMException
+          && profileError.name === "AbortError"
         ) {
           return;
         }
-
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) {
+          setSnapshotLoading(false);
+        }
       });
 
     return () => controller.abort();
   }, [customerId]);
 
-  const hasConversation =
-    messages.length > 0;
+  useEffect(() => {
+    const controller = new AbortController();
 
-  const handleCustomerChange = (
-    nextCustomerId: string,
-  ) => {
-    void resetConversationContext(
-      customerId,
-      conversationId,
-    );
+    void getDemoCustomers(controller.signal)
+      .then(setDemoCustomers)
+      .catch(() => {
+        // Demo list is optional for the selector fallback.
+      });
 
-    setCustomerId(
-      nextCustomerId,
-    );
+    return () => controller.abort();
+  }, []);
 
-    setConversationId(
-      createConversationId(),
-    );
+  const hasConversation = messages.length > 0;
+  const displayName = profile?.name ?? customerId;
+
+  const handleCustomerChange = (nextCustomerId: string) => {
+    void resetConversationContext(customerId, conversationId);
+
+    setCustomerId(nextCustomerId);
+    setConversationId(createConversationId());
     setMessages([]);
     setError(null);
   };
@@ -158,32 +125,23 @@ export default function App() {
       return;
     }
 
-    void resetConversationContext(
-      customerId,
-      conversationId,
-    );
+    void resetConversationContext(customerId, conversationId);
 
-    setConversationId(
-      createConversationId(),
-    );
+    setConversationId(createConversationId());
     setMessages([]);
     setError(null);
+    setAppPage("support");
   };
 
-  const handleSend = async (
-    messageText: string,
-  ) => {
-    const trimmedMessage =
-      messageText.trim();
+  const handleSend = async (messageText: string) => {
+    const trimmedMessage = messageText.trim();
 
-    if (
-      !trimmedMessage ||
-      loading
-    ) {
+    if (!trimmedMessage || loading) {
       return;
     }
 
     setError(null);
+    setAppPage("support");
 
     const userMessage: ChatMessage = {
       id: createMessageId(),
@@ -196,56 +154,54 @@ export default function App() {
     let streamedText = "";
     abortControllerRef.current = abortController;
 
-    setMessages(
-      (current) => [
-        ...current,
-        userMessage,
-        {
-          id: assistantMessageId,
-          role: "assistant",
-          content: "",
-          createdAt: new Date(),
-          isStreaming: true,
-        },
-      ],
-    );
+    setMessages((current) => [
+      ...current,
+      userMessage,
+      {
+        id: assistantMessageId,
+        role: "assistant",
+        content: "",
+        createdAt: new Date(),
+        isStreaming: true,
+      },
+    ]);
 
     setLoading(true);
 
     try {
       await streamChatMessage(
-          customerId,
-          trimmedMessage,
-          conversationId,
-          {
-            onMetadata: (response) => {
-              setMessages((current) =>
-                current.map((message) =>
-                  message.id === assistantMessageId
-                    ? {
-                        ...message,
-                        status: response.status,
-                        source: response.source,
-                        presentation: response.presentation,
-                        options: response.options,
-                      }
-                    : message,
-                ),
-              );
-            },
-            onText: (text) => {
-              streamedText += text;
-              setMessages((current) =>
-                current.map((message) =>
-                  message.id === assistantMessageId
-                    ? { ...message, content: message.content + text }
-                    : message,
-                ),
-              );
-            },
+        customerId,
+        trimmedMessage,
+        conversationId,
+        {
+          onMetadata: (response) => {
+            setMessages((current) =>
+              current.map((message) =>
+                message.id === assistantMessageId
+                  ? {
+                      ...message,
+                      status: response.status,
+                      source: response.source,
+                      presentation: response.presentation,
+                      options: response.options,
+                    }
+                  : message,
+              ),
+            );
           },
-          abortController.signal,
-        );
+          onText: (text) => {
+            streamedText += text;
+            setMessages((current) =>
+              current.map((message) =>
+                message.id === assistantMessageId
+                  ? { ...message, content: message.content + text }
+                  : message,
+              ),
+            );
+          },
+        },
+        abortController.signal,
+      );
 
       setMessages((current) =>
         current.map((message) =>
@@ -254,13 +210,10 @@ export default function App() {
             : message,
         ),
       );
-    } catch (
-      requestError
-    ) {
+    } catch (requestError) {
       const wasAborted = abortController.signal.aborted;
       const errorMessage =
-        requestError instanceof
-        Error
+        requestError instanceof Error
           ? requestError.message
           : (
               "We could not reach the NexaTel support service. " +
@@ -287,9 +240,7 @@ export default function App() {
         abortControllerRef.current = null;
       }
 
-      setLoading(
-        false,
-      );
+      setLoading(false);
     }
   };
 
@@ -297,82 +248,93 @@ export default function App() {
     abortControllerRef.current?.abort();
   };
 
+  const sharedHeader = (
+    <header className="surface-header flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-line)] px-4 sm:px-6">
+      <div>
+        <p className="text-[13px] font-semibold tracking-tight text-[var(--color-ink)]">
+          {headerTitle(appPage)}
+        </p>
+        <p className="text-[11px] text-[var(--color-muted)]">
+          {profile?.phone_masked ?? "Select a customer"}
+        </p>
+      </div>
+
+      <CustomerSelector
+        customerId={customerId}
+        customers={demoCustomers}
+        onCustomerChange={handleCustomerChange}
+        disabled={loading}
+      />
+    </header>
+  );
+
   return (
-    <div className="app-shell flex h-dvh min-h-0 overflow-hidden font-sans text-[#23352e]">
-      {/* Sidebar */}
-      <aside className="hidden w-[236px] shrink-0 flex-col border-r border-[#e0e7e1] bg-[#f3f6f3] text-[#26392f] lg:flex">
-        <div className="flex h-[72px] items-center gap-3 border-b border-[#e3e9e4] px-5">
-          <span className="grid size-9 place-items-center rounded-md bg-[#e2ece4] text-[#285647]">
-            <Signal size={18} strokeWidth={1.9} aria-hidden="true" />
+    <div className="app-shell flex h-dvh min-h-0 overflow-hidden font-sans text-[var(--color-ink)]">
+      <aside className="surface-sidebar hidden w-[220px] shrink-0 flex-col border-r border-[var(--color-line)] lg:flex">
+        <div className="flex h-16 items-center gap-3 border-b border-[var(--color-line)] px-4">
+          <span className="grid size-9 place-items-center rounded-lg bg-white text-[var(--color-brand)] shadow-sm ring-1 ring-[var(--color-line)]">
+            <Signal size={17} strokeWidth={2} aria-hidden="true" />
           </span>
           <div>
-            <span className="block text-[16px] font-semibold leading-5 text-[#20372c]">
+            <span className="block text-[15px] font-semibold tracking-tight text-[var(--color-brand)]">
               NexaTel
             </span>
-            <span className="mt-0.5 block text-[10px] text-[#77877c]">
-              Customer care
+            <span className="mt-0.5 block text-[10px] text-[var(--color-muted)]">
+              Self-care demo
             </span>
           </div>
         </div>
 
-        <div className="px-3 pt-5">
-          <button
-            type="button"
-            onClick={
-              handleNewConversation
-            }
-            disabled={
-              loading
-            }
-            className={[
-              "flex h-10 w-full items-center gap-2.5 rounded-md border border-transparent bg-[#1d4b3b] px-3",
-              "text-[12px] font-medium text-white shadow-sm shadow-[#173c32]/10",
-              "transition-colors duration-150",
-              "hover:bg-[#285b47]",
-              "focus-visible:outline-none",
-              "focus-visible:ring-2",
-              "focus-visible:ring-[#6f927a] focus-visible:ring-offset-2 focus-visible:ring-offset-[#f3f6f3]",
-              "disabled:pointer-events-none disabled:opacity-40",
-            ].join(" ")}
-          >
-            <Plus
-              size={14}
-              strokeWidth={2}
-              className="text-[#dbe7dc]"
-              aria-hidden="true"
-            />
+        {appPage === "support" && (
+          <div className="px-3 pt-4">
+            <button
+              type="button"
+              onClick={handleNewConversation}
+              disabled={loading}
+              className={[
+                "flex h-9 w-full items-center justify-center gap-2 rounded-lg",
+                "bg-[var(--color-brand)] px-3 text-[12px] font-medium text-white",
+                "shadow-sm transition hover:bg-[var(--color-brand-hover)]",
+                "disabled:opacity-40",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f654f]/40",
+              ].join(" ")}
+            >
+              <Plus size={14} strokeWidth={2} aria-hidden="true" />
+              New chat
+            </button>
+          </div>
+        )}
 
-            <span>
-              New conversation
-            </span>
-          </button>
-        </div>
-
-        <nav
-          className="px-3 pt-7"
-          aria-label="Conversations"
-        >
-          <p className="px-3 pb-2 text-[10px] font-medium text-[#7d8c81]">
+        <nav className="space-y-0.5 px-3 pt-4" aria-label="Workspace">
+          <p className="px-3 pb-1.5 text-[10px] font-medium uppercase tracking-wide text-[#8a968d]">
             Workspace
           </p>
-
           <button
             type="button"
-            onClick={handleNewConversation}
-            disabled={loading}
-            className={[
-              "flex h-10 w-full items-center gap-2.5 rounded-md border-l-2 border-[#397354] px-3",
-              "bg-[#e5eee6]",
-              "text-left text-[12px] font-semibold text-[#264a38]",
-              "transition-colors duration-150",
-              "hover:bg-[#dde9df]",
-            ].join(" ")}
+            onClick={() => setAppPage("support")}
+            className="ui-nav-item"
+            data-active={appPage === "support" ? "true" : undefined}
           >
-            <MessagesSquare size={15} strokeWidth={1.8} className="shrink-0 text-[#397354]" aria-hidden="true" />
-
-            <span className="truncate">
-              Support assistant
-            </span>
+            <MessagesSquare size={15} strokeWidth={1.8} aria-hidden="true" />
+            Support
+          </button>
+          <button
+            type="button"
+            onClick={() => setAppPage("account")}
+            className="ui-nav-item"
+            data-active={appPage === "account" ? "true" : undefined}
+          >
+            <LayoutDashboard size={15} strokeWidth={1.8} aria-hidden="true" />
+            Account
+          </button>
+          <button
+            type="button"
+            onClick={() => setAppPage("database")}
+            className="ui-nav-item"
+            data-active={appPage === "database" ? "true" : undefined}
+          >
+            <Database size={15} strokeWidth={1.8} aria-hidden="true" />
+            Database
           </button>
         </nav>
 
@@ -383,180 +345,125 @@ export default function App() {
             </span>
             <div className="min-w-0">
               <span className="block text-[10px] text-[#7a897f]">
-                Selected account
+                Demo account
               </span>
-              <span className="mt-0.5 block truncate text-[11px] font-semibold tabular-nums text-[#2c4336]">
-                {customerName ? `${customerName}` : `${customerId}`}
+              <span className="mt-0.5 block truncate text-[11px] font-semibold text-[#2c4336]">
+                {displayName}
               </span>
             </div>
           </div>
         </div>
       </aside>
 
-      {/* Main application */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col ">
-        {/* Header */}
-        <header className="flex h-[60px] shrink-0 items-center justify-between border-b border-[#e2e8e3] bg-white px-4 sm:px-7">
-          <div className="flex min-w-0 items-center gap-3">
-            <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-[#edf3ef] text-[#285647] lg:hidden">
-              <Headphones size={18} strokeWidth={1.8} aria-hidden="true" />
-            </span>
-            <div className="min-w-0">
-              <span className="block truncate text-[13px] font-semibold text-[#23352e]">
-                Support assistant
-              </span>
-              <span className="mt-0.5 block text-[10px] text-[#839087]">
-                NexaTel customer care
-              </span>
-            </div>
-          </div>
-
-          <div
-            id="customer-context"
-            className="flex items-center gap-2.5"
-          >
-            <span className="hidden text-[10px] font-medium text-[#7e8d84] sm:block">
-              ACCOUNT
-            </span>
-
-            <CustomerSelector
-              customerId={
-                customerId
-              }
-              onCustomerChange={
-                handleCustomerChange
-              }
-              disabled={
-                loading
-              }
-            />
-          </div>
-        </header>
-
-        {/* Conversation */}
-        <main
-          id="conversation"
-          aria-busy={
-            loading
-          }
-          className="min-h-0 flex-1 overflow-hidden bg-[#f6f8f5]"
-        >
-          <div className="mx-auto flex h-full w-full max-w-[920px] flex-col">
-            {!hasConversation ? (
-              <div className="welcome-panel flex min-h-0 flex-1 flex-col justify-center overflow-hidden px-5 py-3 sm:px-9 lg:px-12">
-                <section className="welcome-section mx-auto w-full max-w-[740px] py-2">
-                  <div className="welcome-identity mb-4 flex items-center gap-3">
-                    <span className="grid size-11 place-items-center rounded-xl bg-[#173c32] text-[#f0d69a]">
-                      <Headphones size={20} strokeWidth={1.8} aria-hidden="true" />
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-[12px] font-semibold text-[#526f5c]">
-                        {customerName ? `Welcome, ${customerName}` : `Welcome, ${customerId}`}
-                      </p>
-                      <p className="mt-0.5 text-[10px] text-[#84938a]">
-                        NexaTel customer care
-                      </p>
-                    </div>
-                  </div>
-                  <h1 className="welcome-heading max-w-[600px] text-[30px] font-semibold leading-[1.15] text-[#1c342b] sm:text-[38px]">
-                    How can I help you today?
-                  </h1>
-                  <p className="welcome-description mt-2 max-w-[500px] text-[14px] leading-6 text-[#74837a]">
-                    Get clear answers about your plan, data, bills, and payments.
-                  </p>
-
-                  <div className="welcome-topics mt-6">
-                    <p className="welcome-topics-label mb-2 text-[9px] font-semibold text-[#86938b]">
-                      POPULAR TOPICS
-                    </p>
-                    <div
-                      className="welcome-topic-grid grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3"
-                      aria-label="Suggested questions"
-                    >
-                      {starterPrompts.map((item) => {
-                        const Icon = item.icon;
-
-                        return (
-                          <button
-                            key={item.prompt}
-                            type="button"
-                            onClick={() => handleSend(item.prompt)}
-                            disabled={loading}
-                            className={[
-                              "group flex min-h-[74px] items-center gap-3 rounded-md border border-[#e1e8e2] bg-white px-3.5 py-2.5 text-left",
-                              "welcome-topic-card",
-                              "transition duration-150 hover:border-[#b6c9bb] hover:bg-[#fcfdfb] hover:shadow-[0_5px_16px_rgba(28,52,43,0.06)]",
-                              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#41705d] focus-visible:ring-offset-2",
-                              "disabled:pointer-events-none disabled:opacity-40",
-                            ].join(" ")}
-                          >
-                            <span className={`grid size-9 shrink-0 place-items-center rounded-md ${item.tone}`}>
-                              <Icon size={18} strokeWidth={1.8} aria-hidden="true" />
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block text-[12px] font-semibold text-[#2c3c35]">
-                                {item.title}
-                              </span>
-                              <span className="mt-1 block text-[10px] leading-[1.5] text-[#819087]">
-                                {item.description}
-                              </span>
-                            </span>
-                            <ArrowUpRight
-                              size={15}
-                              strokeWidth={1.8}
-                              aria-hidden="true"
-                              className="shrink-0 text-[#9aa69e] transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-[#28624c]"
-                            />
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </section>
-              </div>
-            ) : (
-              <ChatWindow
-                messages={
-                  messages
-                }
-                loading={
-                  loading
-                }
-                onOptionSelect={
-                  handleSend
-                }
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {appPage === "database" ? (
+          <DatabaseExplorerPage />
+        ) : appPage === "account" ? (
+          <>
+            {sharedHeader}
+            <main className="chat-canvas flex min-h-0 flex-1 flex-col overflow-hidden">
+              <AccountOverviewPage
+                displayName={displayName}
+                snapshot={snapshot}
+                loading={snapshotLoading}
+                onAskInChat={handleSend}
+                disabled={loading}
               />
-            )}
+            </main>
+          </>
+        ) : (
+          <>
+            {sharedHeader}
+            <main
+              id="conversation"
+              aria-busy={loading}
+              className="chat-canvas min-h-0 flex-1 overflow-hidden"
+            >
+              <div className="mx-auto flex h-full w-full max-w-[800px] flex-col">
+                {!hasConversation ? (
+                  <WelcomePanel
+                    name={displayName}
+                    snapshot={snapshot}
+                    loading={snapshotLoading}
+                    onPrompt={handleSend}
+                    disabled={loading}
+                  />
+                ) : (
+                  <ChatWindow
+                    messages={messages}
+                    loading={loading}
+                    onOptionSelect={handleSend}
+                  />
+                )}
 
-            {error && (
-              <div className="shrink-0 px-4 pb-2 sm:px-6">
-                <div
-                  role="alert"
-                  className={[
-                    "flex items-start gap-2.5 rounded-md border border-[#eed5d0]",
-                    "bg-[#fff8f6] px-3.5 py-3",
-                    "text-[11px] leading-5 text-[#874b43]",
-                  ].join(
-                    " ",
-                  )}
-                >
-                  <CircleAlert size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
-                  <span>{error}</span>
+                {error && (
+                  <div className="shrink-0 px-4 pb-2">
+                    <div
+                      role="alert"
+                      className="flex items-start gap-2.5 rounded-md border border-[#eed5d0] bg-[#fff8f6] px-3.5 py-3 text-[11px] text-[#874b43]"
+                    >
+                      <CircleAlert size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
+                      <span>{error}</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="shrink-0">
+                  <MessageInput
+                    onSend={handleSend}
+                    onStop={handleStop}
+                    disabled={loading}
+                  />
                 </div>
               </div>
-            )}
+            </main>
+          </>
+        )}
 
-            <MessageInput
-              onSend={
-                handleSend
-              }
-              onStop={handleStop}
-              disabled={
-                loading
-              }
-            />
-          </div>
-        </main>
+        <nav
+          className="surface-header flex shrink-0 gap-1 border-t border-[var(--color-line)] px-2 py-1.5 lg:hidden"
+          aria-label="Mobile navigation"
+        >
+          <button
+            type="button"
+            onClick={() => setAppPage("support")}
+            className={[
+              "flex flex-1 flex-col items-center gap-0.5 rounded-lg py-2 text-[10px] font-semibold transition",
+              appPage === "support"
+                ? "bg-white text-[var(--color-brand)] shadow-sm ring-1 ring-[var(--color-line)]"
+                : "text-[#96a198]",
+            ].join(" ")}
+          >
+            <MessagesSquare size={16} aria-hidden="true" />
+            Support
+          </button>
+          <button
+            type="button"
+            onClick={() => setAppPage("account")}
+            className={[
+              "flex flex-1 flex-col items-center gap-0.5 rounded-lg py-2 text-[10px] font-semibold transition",
+              appPage === "account"
+                ? "bg-white text-[var(--color-brand)] shadow-sm ring-1 ring-[var(--color-line)]"
+                : "text-[#96a198]",
+            ].join(" ")}
+          >
+            <LayoutDashboard size={16} aria-hidden="true" />
+            Account
+          </button>
+          <button
+            type="button"
+            onClick={() => setAppPage("database")}
+            className={[
+              "flex flex-1 flex-col items-center gap-0.5 rounded-lg py-2 text-[10px] font-semibold transition",
+              appPage === "database"
+                ? "bg-white text-[var(--color-brand)] shadow-sm ring-1 ring-[var(--color-line)]"
+                : "text-[#96a198]",
+            ].join(" ")}
+          >
+            <Database size={16} aria-hidden="true" />
+            Database
+          </button>
+        </nav>
       </div>
     </div>
   );

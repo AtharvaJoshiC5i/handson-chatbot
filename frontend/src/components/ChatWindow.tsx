@@ -32,14 +32,37 @@ export function ChatWindow({
     loading,
   ]);
 
+  const lastAssistantMessageId = messages
+    .filter((message) => message.role === "assistant")
+    .at(-1)?.id;
+
+  function priorUserMessage(
+    messageIndex: number,
+  ): string {
+    for (let index = messageIndex - 1; index >= 0; index -= 1) {
+      if (messages[index].role === "user") {
+        return messages[index].content;
+      }
+    }
+    return "";
+  }
+
   return (
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-none [&::-webkit-scrollbar]:hidden">
-      <div className="mx-auto flex w-full max-w-[800px] flex-col gap-8 px-5 py-8 sm:px-8">
+      <div className="mx-auto flex w-full max-w-[760px] flex-col gap-7 px-4 py-7 sm:px-6 sm:py-8">
         {messages.map(
-          (message) => (
+          (message, messageIndex) => (
             <MessageBubble
               key={message.id}
               message={message}
+              showFollowUps={
+                !loading
+                && message.role === "assistant"
+                && message.id === lastAssistantMessageId
+              }
+              userMessageForFollowUps={priorUserMessage(
+                messageIndex,
+              )}
               onOptionSelect={
                 onOptionSelect
               }

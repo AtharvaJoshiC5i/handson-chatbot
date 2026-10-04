@@ -19,28 +19,34 @@ def test_classifier_recognizes_current_year_usage() -> None:
     assert response.parameters.time_range == TimeRange.CURRENT_YEAR
 
 
-def test_classifier_recognizes_amount_owed_as_current_bill() -> None:
-    response = classify_prompt_guard_request("What do I currently owe?")
+def test_classifier_leaves_billing_phrases_for_structured_llm() -> None:
+    owed = classify_prompt_guard_request("What do I currently owe?")
 
-    assert response.intent == Intent.GET_CURRENT_BILL
-
-
-def test_classifier_does_not_treat_phone_bill_as_device_request() -> None:
-    response = classify_prompt_guard_request("Show me my phone bill")
-
-    assert response.intent == Intent.GET_CURRENT_BILL
+    assert owed.intent == Intent.UNSUPPORTED
 
 
-def test_classifier_recognizes_ticket_and_subscription_aliases() -> None:
-    ticket_response = classify_prompt_guard_request(
-        "Show my open support cases"
-    )
-    plan_response = classify_prompt_guard_request(
+def test_classifier_routes_phone_bill_to_current_mobile_bill() -> None:
+    phone_bill = classify_prompt_guard_request("Show me my phone bill")
+
+    assert phone_bill.intent == Intent.GET_CURRENT_BILL
+    assert phone_bill.parameters.plan_type is not None
+
+
+def test_classifier_leaves_subscription_questions_for_structured_llm() -> None:
+    plan_response = classify_deterministic_request(
         "What subscription am I using?"
     )
 
-    assert ticket_response.intent == Intent.GET_SUPPORT_TICKETS
-    assert plan_response.intent == Intent.GET_CURRENT_PLAN
+    assert plan_response is None
+
+
+def test_classifier_recognizes_sms_usage_this_month() -> None:
+    response = classify_deterministic_request(
+        "Show my SMS usage this month."
+    )
+
+    assert response is not None
+    assert response.intent == Intent.GET_SMS_USAGE
 
 
 def test_classifier_clarifies_unspecified_usage_type() -> None:
@@ -51,36 +57,24 @@ def test_classifier_clarifies_unspecified_usage_type() -> None:
     assert response is not None
     assert response.intent == Intent.UNSUPPORTED
     assert response.clarification is not None
-    assert "data usage" in response.clarification
+    assert "data" in response.clarification
     assert "voice" in response.clarification
 
 
-def test_classifier_provides_choices_for_general_information_request() -> None:
+def test_classifier_leaves_general_information_for_structured_llm() -> None:
     response = classify_deterministic_request(
         "Show me my information."
     )
 
-    assert response is not None
-    assert response.clarification is not None
-    assert response.options
-    assert {option.label for option in response.options} >= {
-        "Account status",
-        "Current plan",
-        "Usage",
-        "Current bill",
-        "Payment status",
-        "Support tickets",
-        "Devices",
-    }
+    assert response is None
 
 
-def test_classifier_recognizes_payment_status_synonyms() -> None:
+def test_classifier_leaves_payment_status_synonyms_for_structured_llm() -> None:
     response = classify_deterministic_request(
         "Has my latest payment gone through?"
     )
 
-    assert response is not None
-    assert response.intent == Intent.GET_PAYMENT_STATUS
+    assert response is None
 
 
 def test_classifier_clarifies_general_payment_help() -> None:

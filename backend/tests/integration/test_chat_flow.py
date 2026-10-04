@@ -1,5 +1,4 @@
 from app.database.connection import create_connection
-from app.intent.router import IntentRouter
 from app.models.api import ChatResponse
 from app.models.domain import (
     CustomerContext,
@@ -12,7 +11,6 @@ from app.models.llm import (
     LLMIntentResponse,
 )
 from app.services.chat_service import ChatService
-from app.services.response_service import ResponseService
 
 
 class FakeLLMClient:
@@ -52,16 +50,14 @@ def run_chat(
 
         service = ChatService(
             llm_client=client,
-            intent_router=IntentRouter(),
-            response_service=ResponseService(),
         )
 
-        return service.process_message(
+        return service.respond(
             db=db,
             customer=CustomerContext(
                 customer_id=customer_id
             ),
-            message="test message",
+            user_message="test message",
         )
 
     finally:
@@ -153,20 +149,20 @@ def test_bill_comparison_without_explicit_ids_uses_latest_two_bills():
     )
 
     assert response.status == TruthStatus.VERIFIED.value
-    assert "BILL009" in response.message
-    assert "BILL010" in response.message
+    assert "September 2026" in response.message
+    assert "August 2026" in response.message
 
 
 def test_bill_comparison_with_explicit_ids():
     response = run_chat(
         Intent.GET_BILL_COMPARISON,
         parameters=IntentParameters(
-            current_bill_id="BILL009",
-            previous_bill_id="BILL010",
+            current_bill_id="BILL010",
+            previous_bill_id="BILL009",
         ),
         customer_id="CUST005",
     )
 
     assert response.status == TruthStatus.VERIFIED.value
-    assert "BILL009" in response.message
-    assert "BILL010" in response.message
+    assert "September 2026" in response.message
+    assert "August 2026" in response.message

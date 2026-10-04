@@ -321,23 +321,26 @@ def _format_usage_summary(
 def _format_usage_history(
     data: dict[str, Any],
 ) -> str:
-    lines = [
-        f"{_metric_label(data['usage_type'])} "
-        "usage history:"
-    ]
-
-    for item in data.get(
+    history = data.get(
         "history",
         [],
-    ):
-        lines.append(
-            f"{item['period']}: "
-            f"{_number(item['value'])} "
-            f"{item['unit']}"
+    )
+    label = _metric_label(
+        data["usage_type"],
+    ).lower()
+
+    if not history:
+        return (
+            f"No {label} usage history is "
+            "available for this period."
         )
 
-    return "\n".join(
-        lines
+    count = len(history)
+
+    return (
+        f"Your {label} usage across {count} "
+        f"{'period' if count == 1 else 'periods'} "
+        "is shown in the breakdown below."
     )
 
 
@@ -380,103 +383,30 @@ def _format_usage_comparison(
     data: dict[str, Any],
 ) -> str:
     label = _metric_label(
-        data["usage_type"]
+        data["usage_type"],
     ).lower()
 
-    value_1 = _number(
-        data[
-            "period_1_usage"
-        ]
+    return (
+        f"Your {label} usage for "
+        f"{data['period_1']} versus "
+        f"{data['period_2']} is compared below."
     )
-
-    value_2 = _number(
-        data[
-            "period_2_usage"
-        ]
-    )
-
-    difference = _number(
-        data[
-            "absolute_difference"
-        ]
-    )
-
-    unit = data[
-        "unit"
-    ]
-
-    if (
-        data["direction"]
-        == "NO_CHANGE"
-    ):
-        return (
-            f"Your {label} usage was the same in "
-            f"{data['period_1']} and "
-            f"{data['period_2']}: "
-            f"{value_1} {unit}."
-        )
-
-    direction_word = (
-        "more"
-        if data[
-            "direction"
-        ]
-        == "INCREASE"
-        else "less"
-    )
-
-    text = (
-        f"You used {value_1} {unit} of {label} in "
-        f"{data['period_1']}, compared with "
-        f"{value_2} {unit} in "
-        f"{data['period_2']}. "
-        f"That's {difference} {unit} "
-        f"{direction_word}."
-    )
-
-    percentage_change = data.get(
-        "percentage_change"
-    )
-
-    if percentage_change is not None:
-        text += (
-            f" That's "
-            f"{_number(abs(float(percentage_change)))}% "
-            f"{'higher' if data['direction'] == 'INCREASE' else 'lower'}."
-        )
-
-    return text
 
 
 def _format_usage_trend(
     data: dict[str, Any],
 ) -> str:
-    phrase = {
-        "GENERALLY_INCREASING": (
-            "generally increased"
-        ),
-        "GENERALLY_DECREASING": (
-            "generally decreased"
-        ),
-        "STABLE": (
-            "remained relatively stable"
-        ),
-    }.get(
-        data["trend"],
-        "changed",
+    label = _metric_label(
+        data["usage_type"],
+    ).lower()
+    months = data.get(
+        "month_count",
+        0,
     )
 
     return (
-        f"Your recorded monthly "
-        f"{_metric_label(data['usage_type']).lower()} "
-        f"usage has {phrase} over the available "
-        f"{data['month_count']}-month period, from "
-        f"{_number(data['first_value'])} "
-        f"{data['unit']} in "
-        f"{data['first_period']} to "
-        f"{_number(data['last_value'])} "
-        f"{data['unit']} in "
-        f"{data['last_period']}."
+        f"Your {label} usage trend over "
+        f"{months} months is shown in the chart below."
     )
 
 
@@ -873,6 +803,20 @@ def _format_last_failed(
         "payment"
     ]
 
+    reason = payment.get(
+        "failure_reason"
+    )
+
+    if reason:
+        return (
+            "Your latest failed payment attempt was "
+            f"{_money(payment['amount'])} via "
+            f"{_label(payment['payment_method'])} on "
+            f"{payment['payment_date']}. "
+            f"The recorded failure reason is "
+            f"{_label(reason).lower()}."
+        )
+
     return (
         "Your latest failed payment attempt was "
         f"{_money(payment['amount'])} via "
@@ -1166,11 +1110,38 @@ def _format_support_last_updated(
         "ticket"
     ]
 
+    if data.get("update_content_available"):
+        return (
+            f"Ticket {ticket['ticket_id']} was last "
+            f"updated on {ticket['updated_at']}. "
+            "Structured update history is available "
+            "for this ticket."
+        )
+
     return (
         f"Ticket {ticket['ticket_id']} was last "
         f"updated on {ticket['updated_at']}. "
         "The available structured data doesn't "
         "contain the content of that update."
+    )
+
+
+def _format_support_ticket_updates(
+    data: dict[str, Any],
+) -> str:
+    ticket = data["ticket"]
+    updates = data.get("updates", [])
+    count = len(updates)
+
+    if count == 0:
+        return (
+            f"Ticket {ticket['ticket_id']} has no "
+            "recorded updates yet."
+        )
+
+    return (
+        f"Ticket {ticket['ticket_id']} has {count} "
+        f"update{'s' if count != 1 else ''} on file."
     )
 
 
@@ -1487,216 +1458,16 @@ def _format_customer_360(
         "account",
         {},
     )
-
     account_status = _label(
-        account.get("account_status")
-    ).lower() or "status unavailable"
-    lines = [
-        f"Your NexaTel account is {account_status}.",
-    ]
+        account.get("account_status"),
+    ).lower() or "unavailable"
 
-    subscription = data.get(
-        "subscription"
+    plan = data.get("plan")
+    plan_name = (
+        plan.get("plan_name")
+        if plan is not None
+        else "your plan"
     )
-
-    plan = data.get(
-        "plan"
-    )
-
-    if plan is None:
-        plan_text = "I couldn't find a plan on your account."
-    else:
-        subscription_status = (
-            _label(
-                subscription.get(
-                    "subscription_status"
-                )
-            )
-            if subscription is not None
-            else "Status unavailable"
-        )
-
-        plan_text = (
-            f"You're on the {plan.get('plan_name', 'Plan unavailable')} plan, "
-            f"which is {subscription_status.lower()}"
-        )
-
-        if (
-            subscription is not None
-            and subscription.get(
-                "subscription_status"
-            )
-            == "ACTIVE"
-        ):
-            plan_text += (
-                f" and renews on {_customer_date(subscription.get('renewal_date'))}"
-            )
-
-        plan_text += "."
-
-    lines.append(plan_text)
-
-    usage = data.get(
-        "usage"
-    )
-
-    if usage is None:
-        usage_text = data.get(
-            "usage_message"
-        ) or "Current usage data is unavailable."
-    elif usage.get(
-        "is_unlimited"
-    ):
-        usage_text = (
-            f"You've used {_number(usage.get('used'))} "
-            f"{usage.get('unit', '')} this cycle; your plan includes unlimited data."
-        )
-    else:
-        usage_text = (
-            f"You've used {_number(usage.get('used'))} "
-            f"{usage.get('unit', '')} of {_number(usage.get('allowance'))} "
-            f"{usage.get('unit', '')} this cycle, with "
-            f"{_number(usage.get('remaining'))} {usage.get('unit', '')} remaining."
-        )
-
-    lines.append(usage_text)
-
-    bill = data.get(
-        "billing"
-    )
-
-    if bill is None:
-        billing_text = "I couldn't find a bill on your account."
-    else:
-        billing_text = (
-            f"Your latest bill is {_money(bill.get('amount'))} — "
-            f"{_label(bill.get('status'))}"
-        )
-
-        if bill.get(
-            "status"
-        ) != "PAID":
-            billing_text += (
-                f". It's due on {_customer_date(bill.get('due_date'))}"
-            )
-
-        billing_text += "."
-
-    lines.append(billing_text)
-
-    payment = data.get(
-        "payment"
-    )
-
-    if payment is None:
-        payment_text = "No payment attempt is recorded."
-    else:
-        latest_attempt = payment.get(
-            "latest_attempt"
-        )
-
-        if latest_attempt is None:
-            payment_text = (
-                "No payment attempt is recorded for this bill."
-                if data.get("billing") is not None
-                else "No payment attempt is recorded."
-            )
-        else:
-            payment_status = str(
-                latest_attempt.get("status", "")
-            ).upper()
-            payment_result = {
-                "SUCCESS": "successful",
-                "FAILED": "unsuccessful",
-            }.get(
-                payment_status,
-                _label(payment_status).lower(),
-            )
-            payment_text = (
-                f"Your latest payment of {_money(latest_attempt.get('amount'))} "
-                f"was {payment_result}."
-            )
-
-        outstanding = payment.get(
-            "outstanding_amount"
-        )
-
-        if outstanding is not None and float(outstanding) > 0:
-            payment_text += f" There is {_money(outstanding)} still outstanding."
-
-    lines.append(payment_text)
-
-    support = data.get(
-        "support",
-        {},
-    )
-    unresolved_count = support.get(
-        "unresolved_count"
-    )
-
-    if unresolved_count is None:
-        support_text = "Your unresolved support-ticket count is unavailable."
-    elif unresolved_count == 0:
-        support_text = "You have no unresolved support tickets."
-    else:
-        support_text = (
-            f"You have {_number(unresolved_count)} unresolved support "
-            f"{'ticket' if unresolved_count == 1 else 'tickets'}."
-        )
-
-    important_ticket = support.get(
-        "important_ticket"
-    )
-
-    if important_ticket is not None:
-        support_text += (
-            f" Your {_label(important_ticket['category']).lower()} request is "
-            f"{_label(important_ticket['status']).lower()} and marked "
-            f"{_label(important_ticket['priority']).lower()} priority."
-        )
-
-    lines.append(support_text)
-
-    devices = data.get(
-        "devices",
-        {},
-    )
-
-    if not devices.get(
-        "available"
-    ):
-        device_text = "No devices are currently associated with your account."
-    else:
-        active_count = devices.get(
-            "active_count",
-            0,
-        )
-
-        if active_count == 0:
-            device_text = "You have no active devices."
-        else:
-            device_names = [
-                device.get(
-                    "device_name"
-                )
-                for device in devices.get(
-                    "active_devices",
-                    [],
-                )[:3]
-            ]
-            device_text = (
-                f"You have {_number(active_count)} active "
-                f"{'device' if active_count == 1 else 'devices'}"
-            )
-
-            if device_names:
-                device_text += ": " + ", ".join(
-                    device_names
-                )
-
-            device_text += "."
-
-    lines.append(device_text)
 
     attention = data.get(
         "attention",
@@ -1707,22 +1478,127 @@ def _format_customer_360(
         [],
     )
 
-    if not attention_items:
-        attention_text = "Nothing currently needs your attention."
+    lead = (
+        f"Here is your account overview. Your account is "
+        f"{account_status} on {plan_name}."
+    )
+
+    if attention_items:
+        lead += (
+            f" {attention_items[0]['message']}"
+        )
     else:
-        attention_text = " ".join(
-            item["message"]
-            for item in attention_items
+        lead += (
+            " Open the sections below for usage, billing, "
+            "payments, and support."
         )
 
-    lines.append(attention_text)
+    return lead
 
-    return "\n\n".join(
-        (
-            " ".join(lines[:3]),
-            " ".join(lines[3:5]),
-            " ".join(lines[5:]),
+
+
+
+def _format_plan_renewal(
+    data: dict[str, Any],
+) -> str:
+    plan_name = data.get(
+        "plan_name",
+        "your plan",
+    )
+    renewal_date = data.get(
+        "renewal_date",
+        "the recorded date",
+    )
+    status = _label(
+        data.get(
+            "subscription_status",
         )
+    ).lower()
+
+    return (
+        f"Your {plan_name} subscription is {status} "
+        f"and renews on {renewal_date}."
+    )
+
+
+def _format_subscription_list(data: dict) -> str:
+    lines = [
+        f"You have {data['count']} subscription(s) on your account:",
+    ]
+    for sub in data["subscriptions"]:
+        lines.append(
+            f"- {sub['plan_name']} ({sub['plan_type']}): "
+            f"{sub['status']}, renews {sub['renewal_date']}"
+        )
+    return " ".join(lines)
+
+
+def _format_plan_catalog(data: dict) -> str:
+    lines = [f"{data['count']} NexaTel plan(s) available:"]
+    for plan in data["plans"]:
+        data_label = (
+            "unlimited data"
+            if plan["is_data_unlimited"]
+            else f"{plan['data_limit_gb']} GB data"
+        )
+        lines.append(
+            f"- {plan['plan_name']} ({plan['plan_type']}): "
+            f"₹{plan['monthly_price']}/month, {data_label}"
+        )
+    return " ".join(lines)
+
+
+def _format_plan_comparison(data: dict) -> str:
+    left = data["current"]
+    right = data["previous"]
+    return (
+        f"{left['plan_name']} (₹{left['monthly_price']}) vs "
+        f"{right['plan_name']} (₹{right['monthly_price']}). "
+        f"Data limits: {left['data_limit_gb']} GB vs "
+        f"{right['data_limit_gb']} GB."
+    )
+
+
+def _format_bill_charge_summary(data: dict) -> str:
+    scope = (
+        f" across your last {data['month_count']} bills"
+        if data.get("month_count")
+        else ""
+    )
+    return (
+        f"Total {data['item_type'].replace('_', ' ').lower()} "
+        f"charges{scope}: ₹{data['total_amount']} "
+        f"from {data['bill_count']} bill(s)."
+    )
+
+
+def _format_projected_bill(data: dict) -> str:
+    return (
+        f"Estimated {data['plan_name']} bill as of "
+        f"{data['as_of_date']}: ₹{data['estimated_amount']} "
+        f"(plan price ₹{data['base_plan_amount']}). "
+        f"{data['note']}"
+    )
+
+
+def _format_payment_profile(data: dict) -> str:
+    autopay = (
+        "enabled" if data["autopay_enabled"] else "disabled"
+    )
+    label = data.get("payment_method_label") or "not on file"
+    method = data.get("default_payment_method") or "none"
+    return (
+        f"Autopay is {autopay}. Default payment method: "
+        f"{method} ({label})."
+    )
+
+
+def _format_account_credits(data: dict) -> str:
+    if data["available_total"] <= 0:
+        return "You have no available account credits."
+    return (
+        f"Available credit balance: ₹{data['available_total']}. "
+        f"{len(data['credits'])} credit record(s) on file."
     )
 
 
@@ -1750,6 +1626,14 @@ FORMATTERS = {
     "BILL_BREAKDOWN": _format_bill_breakdown,
     "BILL_COMPARISON": _format_bill_comparison,
     "BILL_CHANGE_EXPLANATION": _format_bill_change,
+    "SUBSCRIPTION_LIST": _format_subscription_list,
+    "PLAN_RENEWAL": _format_plan_renewal,
+    "PLAN_CATALOG": _format_plan_catalog,
+    "PLAN_COMPARISON": _format_plan_comparison,
+    "BILL_CHARGE_SUMMARY": _format_bill_charge_summary,
+    "PROJECTED_BILL": _format_projected_bill,
+    "PAYMENT_PROFILE": _format_payment_profile,
+    "ACCOUNT_CREDITS": _format_account_credits,
     "BILL_CHANGE_INSUFFICIENT_DETAIL": (
         _format_insufficient_bill_change
     ),
@@ -1785,6 +1669,7 @@ FORMATTERS = {
     ),
     "SUPPORT_SUMMARY": _format_support_summary,
     "SUPPORT_LAST_UPDATED": _format_support_last_updated,
+    "SUPPORT_TICKET_UPDATES": _format_support_ticket_updates,
 
     "DEVICE_LIST": _format_device_list,
     "DEVICE_SPECIFIC": _format_device_specific,
@@ -2042,6 +1927,19 @@ def _format_legacy_result(
             return (
                 f"Your recorded bill amount is "
                 f"{_money(data['amount'])}."
+            )
+
+        if (
+            "renewal_date" in data
+            and "subscription_id" in data
+        ):
+            plan_name = data.get(
+                "plan_name",
+                "your plan",
+            )
+            return (
+                f"Your {plan_name} subscription renews on "
+                f"{data['renewal_date']}."
             )
 
     return None

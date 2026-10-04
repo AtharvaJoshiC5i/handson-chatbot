@@ -105,3 +105,48 @@ def test_usage_and_bill_trends_build_line_charts() -> None:
     assert usage.chart_type == "line"
     assert isinstance(billing, TimeSeriesPresentation)
     assert billing.chart_type == "line"
+
+
+def test_plan_renewal_builds_key_value_presentation() -> None:
+    presentation = _build_presentation(
+        {
+            "result_type": "PLAN_RENEWAL",
+            "plan_name": "NexaMax 799",
+            "plan_type": "MOBILE",
+            "renewal_date": "2026-10-15",
+            "subscription_status": "ACTIVE",
+        }
+    )
+
+    assert presentation is not None
+    assert presentation.type == "key_value"
+    assert presentation.title == "Plan renewal"
+    labels = [item.label for item in presentation.items]
+    assert "Renewal date" in labels
+
+
+def test_payment_history_splits_date_and_time_columns() -> None:
+    presentation = _build_presentation(
+        {
+            "result_type": "PAYMENT_HISTORY",
+            "payments": [
+                {
+                    "payment_date": "2026-11-05T10:30:00",
+                    "amount": 801,
+                    "payment_method": "debit_card",
+                    "status": "SUCCESS",
+                },
+            ],
+        }
+    )
+
+    assert isinstance(presentation, TablePresentation)
+    assert [col.key for col in presentation.columns] == [
+        "date",
+        "time",
+        "amount",
+        "method",
+        "status",
+    ]
+    assert presentation.rows[0]["date"] == "2026-11-05"
+    assert presentation.rows[0]["time"] == "10:30:00"

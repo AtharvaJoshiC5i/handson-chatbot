@@ -54,6 +54,19 @@ from app.handlers.plans import (
     get_current_plan,
     get_plan_renewal,
 )
+from app.handlers.subscriptions_catalog import (
+    get_list_subscriptions,
+    get_plan_catalog,
+    get_plan_comparison,
+)
+from app.handlers.billing_extras import (
+    get_bill_charge_summary,
+    get_projected_bill,
+)
+from app.handlers.payment_profile import (
+    get_account_credits,
+    get_payment_profile_status,
+)
 from app.handlers.support import (
     filter_support_tickets,
     get_customer_support_tickets,
@@ -63,6 +76,7 @@ from app.handlers.support import (
     get_specific_support_ticket,
     get_support_summary,
     get_support_ticket_count,
+    get_support_ticket_updates,
 )
 from app.handlers.usage import (
     get_data_usage,
@@ -75,6 +89,7 @@ from app.handlers.usage import (
     get_usage_summary,
     get_usage_trend,
     get_voice_usage,
+    get_sms_usage,
 )
 from app.intent.parameters import (
     normalize_parameters,
@@ -100,10 +115,14 @@ HANDLERS = {
     "get_account_status": get_account_status,
     "get_current_plan": get_current_plan,
     "get_plan_renewal": get_plan_renewal,
+    "get_list_subscriptions": get_list_subscriptions,
+    "get_plan_catalog": get_plan_catalog,
+    "get_plan_comparison": get_plan_comparison,
 
     # Phase 1
     "get_data_usage": get_data_usage,
     "get_voice_usage": get_voice_usage,
+    "get_sms_usage": get_sms_usage,
     "get_usage_remaining": get_usage_remaining,
     "get_usage_percentage": get_usage_percentage,
     "get_usage_summary": get_usage_summary,
@@ -127,6 +146,8 @@ HANDLERS = {
     "get_bill_extreme": get_bill_extreme,
     "get_bill_trend": get_bill_trend,
     "filter_bills": filter_bills,
+    "get_bill_charge_summary": get_bill_charge_summary,
+    "get_projected_bill": get_projected_bill,
 
     # Phase 3
     "get_payment_status": get_payment_status,
@@ -147,6 +168,8 @@ HANDLERS = {
     "get_payment_outstanding": get_payment_outstanding,
     "get_payment_summary": get_payment_summary,
     "get_payment_aggregate": get_payment_aggregate,
+    "get_payment_profile_status": get_payment_profile_status,
+    "get_account_credits": get_account_credits,
 
     # Phase 4
     "get_customer_support_tickets": (
@@ -165,6 +188,7 @@ HANDLERS = {
     ),
     "get_support_summary": get_support_summary,
     "get_latest_ticket_update": get_latest_ticket_update,
+    "get_support_ticket_updates": get_support_ticket_updates,
 
     "get_device_information": get_device_information,
     "get_specific_device": get_specific_device,
@@ -260,6 +284,12 @@ class IntentRouter:
                 definition.required_parameters
                 | definition.optional_parameters
             )
+
+            parameters = {
+                key: value
+                for key, value in parameters.items()
+                if key in allowed_parameters
+            }
 
             validate_allowed_parameters(
                 intent_parameters=parameters,

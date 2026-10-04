@@ -47,6 +47,7 @@ def create_connection() -> sqlite3.Connection:
         connection = sqlite3.connect(
             database_path,
             timeout=10.0,
+            check_same_thread=False,
         )
 
         connection.row_factory = sqlite3.Row

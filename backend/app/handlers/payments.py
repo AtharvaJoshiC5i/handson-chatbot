@@ -70,6 +70,9 @@ def _payment_dict(
         "transaction_reference": payment[
             "transaction_reference"
         ],
+        "failure_reason": payment[
+            "failure_reason"
+        ],
     }
 
 
@@ -534,7 +537,9 @@ def get_last_failed_payment(
             "payment": _payment_dict(
                 payment
             ),
-            "failure_reason": None,
+            "failure_reason": payment[
+                "failure_reason"
+            ],
         },
         source=source_for_table(
             "payments"

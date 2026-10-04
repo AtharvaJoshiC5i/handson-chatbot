@@ -14,6 +14,9 @@ from app.config.attention import (
     ATTENTION_SUPPORT_STATUSES,
     HIGH_USAGE_ATTENTION_PERCENTAGE,
 )
+from app.database.queries.credits import (
+    get_available_credit_total,
+)
 from app.handlers.account import get_account_status
 from app.handlers.billing import (
     get_bill_breakdown,
@@ -793,6 +796,20 @@ def get_account_plan_status(
     )
 
 
+def _attention_item(
+    domain: str,
+    severity: str,
+    message: str,
+    prompt: str,
+) -> dict[str, str]:
+    return {
+        "domain": domain,
+        "severity": severity,
+        "message": message,
+        "prompt": prompt,
+    }
+
+
 def get_account_attention_summary(
     db: sqlite3.Connection,
     customer: CustomerContext,
@@ -844,13 +861,12 @@ def get_account_attention_summary(
             in ATTENTION_ACCOUNT_STATUSES
         ):
             attention_items.append(
-                {
-                    "domain": "Account",
-                    "severity": "high",
-                    "message": (
-                        "Your account is suspended."
-                    ),
-                }
+                _attention_item(
+                    "Account",
+                    "high",
+                    "Your account is suspended.",
+                    "What is my account status?",
+                )
             )
 
         subscription = (
@@ -871,14 +887,12 @@ def get_account_attention_summary(
                 in ATTENTION_SUBSCRIPTION_STATUSES
             ):
                 attention_items.append(
-                    {
-                        "domain": "Plan",
-                        "severity": "high",
-                        "message": (
-                            "Your subscription is "
-                            "suspended."
-                        ),
-                    }
+                    _attention_item(
+                        "Plan",
+                        "high",
+                        "Your subscription is suspended.",
+                        "Is my account and subscription active?",
+                    )
                 )
 
     # --------------------------------------------------------
@@ -911,19 +925,20 @@ def get_account_attention_summary(
             in ATTENTION_BILL_STATUSES
         ):
             attention_items.append(
-                {
-                    "domain": "Billing",
-                    "severity": (
+                _attention_item(
+                    "Billing",
+                    (
                         "high"
                         if bill_status
                         == "OVERDUE"
                         else "medium"
                     ),
-                    "message": (
+                    (
                         f"Your current bill is "
                         f"{bill_status.lower().replace('_', ' ')}."
                     ),
-                }
+                    "What is my current bill and its payment status?",
+                )
             )
 
     # --------------------------------------------------------
@@ -980,11 +995,16 @@ def get_account_attention_summary(
                     )
 
                 attention_items.append(
-                    {
-                        "domain": "Payment",
-                        "severity": "high",
-                        "message": message,
-                    }
+                    _attention_item(
+                        "Payment",
+                        "high",
+                        message,
+                        (
+                            "Why did my payment fail?"
+                            if payment_status == "FAILED"
+                            else "What is the status of my latest payment?"
+                        ),
+                    )
                 )
 
     # --------------------------------------------------------
@@ -1047,15 +1067,16 @@ def get_account_attention_summary(
         )
 
         attention_items.append(
-            {
-                "domain": "Support",
-                "severity": "high",
-                "message": (
+            _attention_item(
+                "Support",
+                "high",
+                (
                     f"You have {count} unresolved "
                     f"{highest} support "
                     f"{'ticket' if count == 1 else 'tickets'}."
                 ),
-            }
+                "Show my open support tickets.",
+            )
         )
 
     # --------------------------------------------------------
@@ -1101,16 +1122,38 @@ def get_account_attention_summary(
             >= HIGH_USAGE_ATTENTION_PERCENTAGE
         ):
             attention_items.append(
-                {
-                    "domain": "Usage",
-                    "severity": "medium",
-                    "message": (
+                _attention_item(
+                    "Usage",
+                    "medium",
+                    (
                         f"You've used "
                         f"{float(percentage):.1f}% "
                         "of your current data allowance."
                     ),
-                }
+                    "How much data have I used this month?",
+                )
             )
+
+    try:
+        credit_total = get_available_credit_total(
+            db,
+            customer.customer_id,
+        )
+    except sqlite3.Error:
+        credit_total = 0.0
+
+    if credit_total > 0:
+        attention_items.append(
+            _attention_item(
+                "Credits",
+                "medium",
+                (
+                    f"You have ₹{credit_total:.0f} in "
+                    "available account credits."
+                ),
+                "Do I have any account credits?",
+            )
+        )
 
     return verified_result(
         {
@@ -1298,6 +1341,12 @@ def get_customer_360(
             "priority": important_ticket[
                 "priority"
             ],
+            "related_bill_id": important_ticket.get(
+                "related_bill_id"
+            ),
+            "related_payment_id": important_ticket.get(
+                "related_payment_id"
+            ),
         }
 
     device_summary = (

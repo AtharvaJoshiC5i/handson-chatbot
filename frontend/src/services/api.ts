@@ -1,4 +1,9 @@
 import type {
+  AccountSnapshot,
+  CustomerProfile,
+  DemoCustomer,
+} from "../types/account";
+import type {
   ChatOption,
   ChatPresentation,
   ChatResponse,
@@ -645,14 +650,54 @@ export async function checkBackendHealth(): Promise<boolean> {
   }
 }
 
-export async function getCustomerName(
-  customerId: string,
-  signal?: AbortSignal,
-): Promise<string> {
-  let response: Response;
+function parseCustomerProfile(
+  responseBody: unknown,
+  statusCode: number,
+): CustomerProfile {
+  if (
+    !isRecord(responseBody)
+    || !isString(responseBody.name)
+    || !isString(responseBody.phone_masked)
+    || !isString(responseBody.city)
+    || !isString(responseBody.service_address_line)
+    || !isString(responseBody.account_status)
+  ) {
+    throw new ApiError(
+      "The backend returned an invalid customer profile.",
+      statusCode,
+    );
+  }
 
+  return {
+    name: responseBody.name,
+    phone_masked: responseBody.phone_masked,
+    city: responseBody.city,
+    service_address_line: responseBody.service_address_line,
+    account_status: responseBody.account_status,
+  };
+}
+
+function parseAccountSnapshot(
+  responseBody: unknown,
+  statusCode: number,
+): AccountSnapshot {
+  if (!isRecord(responseBody) || !isString(responseBody.customer_id)) {
+    throw new ApiError(
+      "The backend returned an invalid account snapshot.",
+      statusCode,
+    );
+  }
+
+  return responseBody as unknown as AccountSnapshot;
+}
+
+async function fetchWithCustomerHeader(
+  customerId: string,
+  path: string,
+  signal?: AbortSignal,
+): Promise<Response> {
   try {
-    response = await fetch(`${API_BASE_URL}/chat/profile`, {
+    return await fetch(`${API_BASE_URL}${path}`, {
       headers: {
         "X-Customer-ID": customerId,
       },
@@ -668,8 +713,20 @@ export async function getCustomerName(
       0,
     );
   }
+}
+
+export async function getCustomerProfile(
+  customerId: string,
+  signal?: AbortSignal,
+): Promise<CustomerProfile> {
+  const response = await fetchWithCustomerHeader(
+    customerId,
+    "/chat/profile",
+    signal,
+  );
 
   let responseBody: unknown = null;
+
   try {
     responseBody = await response.json();
   } catch {
@@ -683,14 +740,118 @@ export async function getCustomerName(
     );
   }
 
-  if (!isRecord(responseBody) || !isString(responseBody.name)) {
+  return parseCustomerProfile(
+    responseBody,
+    response.status,
+  );
+}
+
+export async function getCustomerName(
+  customerId: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const profile = await getCustomerProfile(
+    customerId,
+    signal,
+  );
+
+  return profile.name;
+}
+
+export async function getAccountSnapshot(
+  customerId: string,
+  signal?: AbortSignal,
+): Promise<AccountSnapshot> {
+  const response = await fetchWithCustomerHeader(
+    customerId,
+    "/chat/account-snapshot",
+    signal,
+  );
+
+  let responseBody: unknown = null;
+
+  try {
+    responseBody = await response.json();
+  } catch {
+    // Leave the response invalid so it is reported below.
+  }
+
+  if (!response.ok) {
     throw new ApiError(
-      "The backend returned an invalid customer profile.",
+      getErrorMessage(responseBody, response.status),
       response.status,
     );
   }
 
-  return responseBody.name;
+  return parseAccountSnapshot(
+    responseBody,
+    response.status,
+  );
+}
+
+export async function getDemoCustomers(
+  signal?: AbortSignal,
+): Promise<DemoCustomer[]> {
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_BASE_URL}/chat/demo-customers`, {
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw error;
+    }
+
+    throw new ApiError(
+      "The NexaTel backend is unavailable. Make sure it is running on port 8001.",
+      0,
+    );
+  }
+
+  let responseBody: unknown = null;
+
+  try {
+    responseBody = await response.json();
+  } catch {
+    // Leave the response invalid so it is reported below.
+  }
+
+  if (!response.ok) {
+    throw new ApiError(
+      getErrorMessage(responseBody, response.status),
+      response.status,
+    );
+  }
+
+  if (
+    !isRecord(responseBody)
+    || !Array.isArray(responseBody.customers)
+  ) {
+    throw new ApiError(
+      "The backend returned an invalid demo customer list.",
+      response.status,
+    );
+  }
+
+  return responseBody.customers.flatMap((item) => {
+    if (
+      !isRecord(item)
+      || !isString(item.customer_id)
+      || !isString(item.name)
+      || !isString(item.phone_masked)
+    ) {
+      return [];
+    }
+
+    return [
+      {
+        customer_id: item.customer_id,
+        name: item.name,
+        phone_masked: item.phone_masked,
+      },
+    ];
+  });
 }
 
 export async function streamChatMessage(

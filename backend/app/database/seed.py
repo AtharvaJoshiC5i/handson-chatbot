@@ -6,7 +6,18 @@ from pathlib import Path
 import sqlite3
 
 SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
-MONTHS = [(2026, m) for m in range(4, 10)]
+MONTHS = (
+    [(2025, month) for month in range(10, 13)]
+    + [(2026, month) for month in range(1, 11)]
+)
+
+# Demo customers with more than one subscription (mobile + fiber).
+MULTI_SUBSCRIPTION_CUSTOMERS = {
+    "CUST003": (
+        "PLAN003",
+        "2023-12-01",
+    ),
+}
 
 # Intentional manager-demo fixtures:
 # CUST002: roaming bill increase + failed payment + billing ticket.
@@ -280,6 +291,547 @@ DEVNAMES = [
     "TP-Link Archer AX55",
 ]
 
+# Populated during _usage for bill_shock / heavy linkage.
+USAGE_MONTH_DATA_GB: dict[
+    tuple[str, int, int],
+    float,
+] = {}
+
+BILLING_PERSONA_BY_INDEX = {
+    1: "autopay_steady",
+    2: "roaming_story",
+    3: "fiber_stable",
+    4: "chronic_late",
+    5: "autopay_steady",
+    6: "bill_shock",
+    7: "churned",
+    8: "fiber_stable",
+    9: "addon_heavy",
+    10: "addon_heavy",
+    11: "autopay_steady",
+    12: "fiber_stable",
+    13: "autopay_steady",
+    14: "addon_heavy",
+    15: "chronic_late",
+    16: "fiber_stable",
+    17: "bill_shock",
+    18: "autopay_steady",
+    19: "churned",
+    20: "fiber_stable",
+}
+
+RESERVED_BILL_IDS = frozenset(
+    {"BILL009", "BILL010", "BILL027"},
+)
+
+
+def _billing_persona(
+    customer_index: int,
+    plan: tuple,
+) -> str:
+    if plan[7] == "FIBER":
+        return "fiber_stable"
+    return BILLING_PERSONA_BY_INDEX.get(
+        customer_index,
+        "autopay_steady",
+    )
+
+
+def _month_seed(
+    customer_index: int,
+    year: int,
+    month: int,
+) -> int:
+    return (
+        customer_index * 37
+        + year * 13
+        + month * 11
+    ) % 97
+
+
+def _payment_method_for_bill(
+    customer_index: int,
+    year: int,
+    month: int,
+    persona: str,
+) -> str:
+    if persona == "fiber_stable":
+        return "NET_BANKING"
+    methods = (
+        "UPI",
+        "UPI",
+        "UPI",
+        "CREDIT_CARD",
+        "DEBIT_CARD",
+        "NET_BANKING",
+    )
+    pick = _month_seed(
+        customer_index,
+        year,
+        month,
+    )
+    return methods[pick % len(methods)]
+
+
+def _bill_amount_and_lines(
+    customer_index: int,
+    customer_id: str,
+    plan: tuple,
+    year: int,
+    month: int,
+    subscription_index: int,
+    bill_id: str,
+) -> tuple[float, list[tuple[str, float, str]]]:
+    price = float(plan[2])
+    persona = _billing_persona(
+        customer_index,
+        plan,
+    )
+    seed = _month_seed(
+        customer_index,
+        year,
+        month,
+    )
+
+    charges: list[tuple[str, float, str]] = []
+
+    if (
+        customer_index == 2
+        and month == 9
+        and plan[7] == "MOBILE"
+    ):
+        charges = [
+            (
+                "Monthly plan charge",
+                price,
+                "PLAN_CHARGE",
+            ),
+            (
+                "International roaming",
+                301.0,
+                "ROAMING",
+            ),
+            (
+                "Roaming tax",
+                43.0,
+                "TAX",
+            ),
+        ]
+        return (
+            round(sum(c[1] for c in charges), 2),
+            charges,
+        )
+
+    if (
+        customer_index == 10
+        and month == 8
+        and plan[7] == "MOBILE"
+    ):
+        charges = [
+            (
+                "Monthly plan charge",
+                price,
+                "PLAN_CHARGE",
+            ),
+            (
+                "10 GB data add-on",
+                199.0,
+                "DATA_ADDON",
+            ),
+        ]
+        return (
+            round(sum(c[1] for c in charges), 2),
+            charges,
+        )
+
+    if (
+        customer_index == 17
+        and month == 7
+        and plan[7] == "MOBILE"
+    ):
+        charges = [
+            (
+                "Monthly plan charge",
+                price,
+                "PLAN_CHARGE",
+            ),
+            (
+                "International calling service",
+                149.0,
+                "OTHER",
+            ),
+        ]
+        return (
+            round(sum(c[1] for c in charges), 2),
+            charges,
+        )
+
+    if bill_id == "BILL009":
+        amount = round(price + 2.0, 2)
+        return (
+            amount,
+            [
+                (
+                    "Plan rental (incl. GST)",
+                    amount,
+                    "PLAN_CHARGE",
+                ),
+            ],
+        )
+
+    if bill_id == "BILL010":
+        amount = round(price + 149.0, 2)
+        return (
+            amount,
+            [
+                (
+                    "Monthly charges + 2GB data booster",
+                    amount,
+                    "PLAN_CHARGE",
+                ),
+            ],
+        )
+
+    if (
+        customer_index == 6
+        and month == 9
+        and plan[7] == "MOBILE"
+        and subscription_index == 0
+    ):
+        amount = 999.0
+        return (
+            amount,
+            [
+                (
+                    "Plan rental + excess data usage",
+                    amount,
+                    "PLAN_CHARGE",
+                ),
+            ],
+        )
+
+    amount = price
+    description = "Monthly plan charge"
+
+    if persona == "autopay_steady":
+        noise = (seed % 5) - 2
+        amount = round(price + noise, 2)
+        if seed % 11 == 0:
+            amount = round(price + 49.0, 2)
+            description = "Plan rental + SMS pack (incl. GST)"
+        else:
+            description = "Plan rental (incl. GST)"
+
+    elif persona == "addon_heavy":
+        addons = (0, 99, 149, 199, 249)
+        addon = addons[seed % len(addons)]
+        amount = round(price + addon, 2)
+        if addon:
+            description = (
+                f"Monthly charges + booster pack (₹{addon:.0f})"
+            )
+        else:
+            description = "Plan rental (incl. GST)"
+
+    elif persona == "fiber_stable":
+        amount = price
+        if seed % 9 == 0:
+            amount = round(price + 99.0, 2)
+            description = "Fiber rent + static IP add-on"
+        elif seed % 5 == 0:
+            description = "Broadband monthly rental (incl. GST)"
+        else:
+            description = "Fiber plan rental (incl. GST)"
+
+    elif persona == "chronic_late":
+        amount = round(price + (seed % 3), 2)
+        description = "Plan rental (incl. GST)"
+
+    elif persona == "bill_shock":
+        amount = price
+        description = "Plan rental (incl. GST)"
+        usage_total = USAGE_MONTH_DATA_GB.get(
+            (customer_id, year, month),
+        )
+        if usage_total is not None and usage_total >= 70:
+            surcharge = round(
+                price * 0.12
+                + (seed % 4) * 5,
+                2,
+            )
+            amount = round(price + surcharge, 2)
+            description = (
+                "Plan rental + excess data usage"
+            )
+        elif usage_total is not None and usage_total >= 55:
+            surcharge = round(price * 0.08, 2)
+            amount = round(price + surcharge, 2)
+            description = (
+                "Monthly charges incl. fair-usage excess"
+            )
+
+    elif persona == "churned":
+        amount = round(price + (seed % 2), 2)
+        description = "Final cycle plan charges"
+
+    elif persona == "roaming_story":
+        amount = round(price + (seed % 4), 2)
+        description = "Plan rental (incl. GST)"
+
+    total = round(amount, 2)
+    return (
+        total,
+        [
+            (
+                description,
+                total,
+                "PLAN_CHARGE",
+            ),
+        ],
+    )
+
+
+def _bill_status(
+    customer_index: int,
+    year: int,
+    month: int,
+    plan: tuple,
+    subscription_index: int,
+    customer_account_status: str,
+) -> str:
+    if (
+        customer_index == 2
+        and month == 9
+        and plan[7] == "MOBILE"
+    ):
+        return "UNPAID"
+
+    if (
+        customer_index in (4, 15)
+        and month == 9
+        and subscription_index == 0
+    ):
+        return "OVERDUE"
+
+    if (
+        customer_index == 6
+        and month == 9
+        and subscription_index == 0
+    ):
+        return "PARTIALLY_PAID"
+
+    if (
+        customer_index == 8
+        and month == 9
+        and subscription_index == 0
+    ):
+        return "UNPAID"
+
+    persona = _billing_persona(
+        customer_index,
+        plan,
+    )
+    seed = _month_seed(
+        customer_index,
+        year,
+        month,
+    )
+
+    if persona == "chronic_late" and subscription_index == 0:
+        if (year, month) in {
+            (2026, 3),
+            (2026, 7),
+            (2025, 12),
+        }:
+            return "OVERDUE"
+        if (year, month) == (2026, 1):
+            return "UNPAID"
+
+    if persona == "addon_heavy" and plan[7] == "MOBILE":
+        if (year, month) in {
+            (2026, 2),
+            (2025, 11),
+        }:
+            return "UNPAID"
+
+    if persona == "churned" and subscription_index == 0:
+        months = MONTHS
+        if customer_index == 7:
+            tail = months[4:5]
+        else:
+            tail = months[3:4]
+        if (year, month) in tail:
+            return "UNPAID"
+
+    if persona == "autopay_steady" and seed % 29 == 0:
+        return "UNPAID"
+
+    return "PAID"
+
+
+def _append_payment_for_bill(
+    payments: list,
+    payment_number: int,
+    bill_id: str,
+    customer_id: str,
+    customer_index: int,
+    total: float,
+    status: str,
+    year: int,
+    month: int,
+    due_date: str,
+    plan: tuple,
+) -> int:
+    persona = _billing_persona(
+        customer_index,
+        plan,
+    )
+    period_end = date(
+        year,
+        month,
+        _last(year, month),
+    )
+    on_time = (
+        period_end + timedelta(days=5)
+    ).isoformat() + "T10:30:00"
+    late = (
+        date.fromisoformat(due_date)
+        + timedelta(days=4)
+    ).isoformat() + "T18:45:00"
+
+    payment_date = on_time
+    if (
+        status == "PAID"
+        and persona in ("chronic_late", "addon_heavy")
+        and _month_seed(customer_index, year, month) % 7 == 0
+    ):
+        payment_date = late
+
+    if status == "PAID":
+        payments.append(
+            (
+                _id("PAY", payment_number),
+                bill_id,
+                customer_id,
+                total,
+                payment_date,
+                _payment_method_for_bill(
+                    customer_index,
+                    year,
+                    month,
+                    persona,
+                ),
+                "SUCCESS",
+                f"TXN2026{payment_number:06d}",
+                None,
+            )
+        )
+        return payment_number + 1
+
+    if (
+        customer_index == 2
+        and month == 9
+        and plan[7] == "MOBILE"
+    ):
+        payments.append(
+            (
+                _id("PAY", payment_number),
+                bill_id,
+                customer_id,
+                total,
+                payment_date,
+                "CREDIT_CARD",
+                "FAILED",
+                f"TXN2026{payment_number:06d}",
+                "INSUFFICIENT_FUNDS",
+            )
+        )
+        return payment_number + 1
+
+    if (
+        customer_index == 6
+        and month == 9
+    ):
+        payments.append(
+            (
+                _id("PAY", payment_number),
+                bill_id,
+                customer_id,
+                round(total * 0.45, 2),
+                payment_date,
+                "UPI",
+                "SUCCESS",
+                f"TXN2026{payment_number:06d}",
+                None,
+            )
+        )
+        return payment_number + 1
+
+    if (
+        customer_index == 8
+        and month == 9
+    ):
+        payments.append(
+            (
+                _id("PAY", payment_number),
+                bill_id,
+                customer_id,
+                total,
+                payment_date,
+                "NET_BANKING",
+                "PENDING",
+                f"TXN2026{payment_number:06d}",
+                None,
+            )
+        )
+        return payment_number + 1
+
+    if (
+        customer_index == 15
+        and month == 9
+    ):
+        payments.append(
+            (
+                _id("PAY", payment_number),
+                bill_id,
+                customer_id,
+                total,
+                payment_date,
+                "DEBIT_CARD",
+                "FAILED",
+                f"TXN2026{payment_number:06d}",
+                "CARD_DECLINED",
+            )
+        )
+        return payment_number + 1
+
+    if status in ("UNPAID", "OVERDUE"):
+        payments.append(
+            (
+                _id("PAY", payment_number),
+                bill_id,
+                customer_id,
+                total,
+                payment_date,
+                _payment_method_for_bill(
+                    customer_index,
+                    year,
+                    month,
+                    persona,
+                ),
+                "FAILED",
+                f"TXN2026{payment_number:06d}",
+                (
+                    "INSUFFICIENT_FUNDS"
+                    if status == "UNPAID"
+                    else "CARD_DECLINED"
+                ),
+            )
+        )
+        return payment_number + 1
+
+    return payment_number
+
 
 def initialize_database(
     connection: sqlite3.Connection,
@@ -294,6 +846,95 @@ def initialize_database(
     connection.commit()
 
 
+
+
+def _customers() -> list[tuple]:
+    rows = []
+    for customer in CUSTOMERS:
+        customer_id, name, email, phone, city, status, reg_date = customer
+        rows.append(
+            (
+                customer_id,
+                name,
+                email,
+                phone,
+                city,
+                "",
+                "",
+                "",
+                status,
+                reg_date,
+            )
+        )
+    rows[2] = (
+        "CUST003",
+        "Rohan Kapoor",
+        "rohan.kapoor@example.com",
+        "+919000000003",
+        "Bengaluru",
+        "42 MG Road, Indiranagar",
+        "Karnataka",
+        "560038",
+        "ACTIVE",
+        "2023-11-10",
+    )
+    rows[0] = (
+        *rows[0][:5],
+        "Flat 12B, Andheri West",
+        "Maharashtra",
+        "400053",
+        *rows[0][8:],
+    )
+    rows[4] = (
+        *rows[4][:5],
+        "14 Satellite Road",
+        "Gujarat",
+        "380015",
+        *rows[4][8:],
+    )
+    rows[8] = (
+        *rows[8][:5],
+        "HITEC City, Phase 2",
+        "Telangana",
+        "500081",
+        *rows[8][8:],
+    )
+    return rows
+
+
+def _customer_extensions(connection: sqlite3.Connection) -> None:
+    profiles = [
+        ("CUST001", 1, "UPI", "Paytm UPI •••• 8821"),
+        ("CUST002", 0, "CREDIT_CARD", "Visa credit •••• 4242"),
+        ("CUST003", 1, "NET_BANKING", "HDFC NetBanking (autopay)"),
+        ("CUST005", 1, "DEBIT_CARD", "SBI debit •••• 9911"),
+    ]
+    connection.executemany(
+        """
+        INSERT INTO customer_payment_profiles
+        VALUES (?,?,?,?)
+        """,
+        profiles,
+    )
+    credits = [
+        (
+            "CRD001",
+            "CUST002",
+            150.0,
+            "SR#NX-2026-0918 goodwill — roaming dispute",
+            "2026-09-20",
+            "AVAILABLE",
+        ),
+    ]
+    connection.executemany(
+        """
+        INSERT INTO account_credits
+        VALUES (?,?,?,?,?,?)
+        """,
+        credits,
+    )
+
+
 def _id(prefix: str, number: int) -> str:
     return f"{prefix}{number:03d}"
 
@@ -306,11 +947,12 @@ def seed_database(
     connection: sqlite3.Connection,
     reset: bool = False,
 ) -> None:
+    USAGE_MONTH_DATA_GB.clear()
     initialize_database(connection, reset=reset)
 
     connection.executemany(
-        "INSERT INTO customers VALUES (?,?,?,?,?,?,?)",
-        CUSTOMERS,
+        "INSERT INTO customers VALUES (?,?,?,?,?,?,?,?,?,?)",
+        _customers(),
     )
 
     connection.executemany(
@@ -357,15 +999,32 @@ def seed_database(
             )
         )
 
+    for customer_id, (
+        mobile_plan_id,
+        activation_date,
+    ) in MULTI_SUBSCRIPTION_CUSTOMERS.items():
+        subscriptions.append(
+            (
+                f"{customer_id}M",
+                customer_id,
+                mobile_plan_id,
+                activation_date,
+                "ACTIVE",
+                "2026-10-15",
+            )
+        )
+
     connection.executemany(
         "INSERT INTO subscriptions VALUES (?,?,?,?,?,?)",
         subscriptions,
     )
 
     _usage(connection, subscriptions)
-    _billing(connection)
+    _billing(connection, subscriptions)
     _tickets(connection)
+    _ticket_updates(connection)
     _devices(connection)
+    _customer_extensions(connection)
 
     connection.commit()
 
@@ -377,15 +1036,26 @@ def _usage(
     rows = []
     usage_number = 1
 
-    for customer_index, subscription in enumerate(
-        subscriptions,
-        1,
-    ):
+    customer_index_by_id = {
+        customer[0]: index
+        for index, customer in enumerate(
+            CUSTOMERS,
+            1,
+        )
+    }
+
+    for subscription in subscriptions:
+        customer_index = customer_index_by_id[
+            subscription[1]
+        ]
         plan = PLAN_BY_ID[subscription[2]]
         pattern = PATTERNS[customer_index - 1]
 
+        if plan[7] == "FIBER":
+            pattern = "fiber"
+
         for month_index, (year, month) in enumerate(MONTHS):
-            if pattern == "cancelled" and month > 7:
+            if pattern == "cancelled" and month_index >= 5:
                 continue
 
             if pattern == "fiber":
@@ -400,7 +1070,10 @@ def _usage(
                     "stable": 34,
                     "rising": 24 + month_index * 6,
                     "heavy": 70 + month_index * 5,
-                    "declining": 48 - month_index * 5,
+                    "declining": max(
+                        12,
+                        48 - month_index * 3,
+                    ),
                     "spike": (
                         35
                         if month != 8
@@ -411,10 +1084,42 @@ def _usage(
 
             # Demo customer CUST006 has a deliberate
             # month-over-month heavy usage pattern.
-            if customer_index == 6:
-                total = [61, 68, 74, 81, 88, 94][
-                    month_index
-                ]
+            if (
+                customer_index == 6
+                and plan[7] == "MOBILE"
+            ):
+                canonical_month_totals = {
+                    (2026, 4): 61,
+                    (2026, 5): 68,
+                    (2026, 6): 74,
+                    (2026, 7): 81,
+                    (2026, 8): 88,
+                    (2026, 9): 94,
+                    (2026, 10): 97,
+                }
+
+                total = canonical_month_totals.get(
+                    (year, month),
+                    [
+                        45,
+                        52,
+                        58,
+                        61,
+                        68,
+                        74,
+                        81,
+                        88,
+                        90,
+                        92,
+                        93,
+                        95,
+                        97,
+                    ][month_index],
+                )
+
+            USAGE_MONTH_DATA_GB[
+                (subscription[1], year, month)
+            ] = float(total)
 
             for part_index, day in enumerate((5, 15, 25)):
                 data = round(
@@ -468,7 +1173,10 @@ def _usage(
     )
 
 
-def _billing(connection: sqlite3.Connection) -> None:
+def _billing(
+    connection: sqlite3.Connection,
+    subscriptions: list[tuple],
+) -> None:
     bills = []
     items = []
     payments = []
@@ -476,6 +1184,17 @@ def _billing(connection: sqlite3.Connection) -> None:
     bill_number = 1
     item_number = 1
     payment_number = 1
+
+    subscriptions_by_customer: dict[
+        str,
+        list[tuple],
+    ] = {}
+
+    for subscription in subscriptions:
+        subscriptions_by_customer.setdefault(
+            subscription[1],
+            [],
+        ).append(subscription)
 
     for customer_index, customer in enumerate(
         CUSTOMERS,
@@ -489,225 +1208,142 @@ def _billing(connection: sqlite3.Connection) -> None:
         else:
             months = MONTHS
 
-        plan = PLAN_BY_ID[ASSIGN[customer_index - 1]]
-        price = float(plan[2])
+        customer_subscriptions = (
+            subscriptions_by_customer.get(
+                customer[0],
+                [],
+            )
+        )
 
-        for month_index, (year, month) in enumerate(months):
-            # Retain IDs expected by existing CUST005
-            # tests/evaluation.
-            if customer_index == 5 and month_index == 4:
-                bill_id = "BILL009"
+        for subscription_index, subscription in enumerate(
+            customer_subscriptions,
+        ):
+            subscription_id = subscription[0]
+            plan = PLAN_BY_ID[subscription[2]]
 
-            elif customer_index == 5 and month_index == 5:
-                bill_id = "BILL010"
+            for month_index, (year, month) in enumerate(
+                months,
+            ):
+                if (
+                    customer_index in (2, 5, 6)
+                    and (year, month) == (2026, 10)
+                    and plan[7] == "MOBILE"
+                    and subscription_index == 0
+                ):
+                    continue
 
-            else:
-                while _id(
-                    "BILL",
-                    bill_number,
-                ) in {"BILL009", "BILL010"}:
+                if (
+                    customer_index == 5
+                    and subscription_index == 0
+                    and month_index == 10
+                ):
+                    bill_id = "BILL009"
+
+                elif (
+                    customer_index == 5
+                    and subscription_index == 0
+                    and month_index == 11
+                ):
+                    bill_id = "BILL010"
+
+                elif (
+                    customer_index == 2
+                    and subscription_index == 0
+                    and (year, month) == (2026, 9)
+                    and plan[7] == "MOBILE"
+                ):
+                    bill_id = "BILL027"
+
+                else:
+                    while _id(
+                        "BILL",
+                        bill_number,
+                    ) in RESERVED_BILL_IDS:
+                        bill_number += 1
+
+                    bill_id = _id("BILL", bill_number)
                     bill_number += 1
 
-                bill_id = _id("BILL", bill_number)
-                bill_number += 1
-
-            charges = [
-                (
-                    "Monthly plan charge",
-                    price,
-                    "PLAN_CHARGE",
-                )
-            ]
-
-            # Deliberate roaming bill-increase scenario.
-            if customer_index == 2 and month == 9:
-                charges += [
-                    (
-                        "International roaming",
-                        301.0,
-                        "ROAMING",
-                    ),
-                    (
-                        "Roaming tax",
-                        43.0,
-                        "TAX",
-                    ),
-                ]
-
-            # Deliberate data add-on scenario.
-            if customer_index == 10 and month == 8:
-                charges += [
-                    (
-                        "10 GB data add-on",
-                        199.0,
-                        "DATA_ADDON",
-                    )
-                ]
-
-            # Deliberate additional-service scenario.
-            if customer_index == 17 and month == 7:
-                charges += [
-                    (
-                        "International calling service",
-                        149.0,
-                        "OTHER",
-                    )
-                ]
-
-            total = round(
-                sum(charge[1] for charge in charges),
-                2,
-            )
-
-            status = "PAID"
-
-            if customer_index == 2 and month == 9:
-                status = "UNPAID"
-
-            elif customer_index in (4, 15) and month == 9:
-                status = "OVERDUE"
-
-            elif customer_index == 6 and month == 9:
-                status = "PARTIALLY_PAID"
-
-            elif customer_index == 8 and month == 9:
-                status = "UNPAID"
-
-            period_start = f"{year}-{month:02d}-01"
-
-            period_end = (
-                f"{year}-{month:02d}-"
-                f"{_last(year, month):02d}"
-            )
-
-            due_date = (
-                date(
+                total, charges = _bill_amount_and_lines(
+                    customer_index,
+                    customer[0],
+                    plan,
                     year,
                     month,
-                    _last(year, month),
-                )
-                + timedelta(days=12)
-            ).isoformat()
-
-            bills.append(
-                (
+                    subscription_index,
                     bill_id,
-                    customer[0],
-                    period_start,
-                    period_end,
-                    total,
-                    due_date,
-                    status,
                 )
-            )
 
-            for description, amount, item_type in charges:
-                items.append(
-                    (
-                        _id("ITEM", item_number),
-                        bill_id,
-                        description,
-                        amount,
-                        item_type,
-                    )
+                status = _bill_status(
+                    customer_index,
+                    year,
+                    month,
+                    plan,
+                    subscription_index,
+                    customer[5],
                 )
-                item_number += 1
 
-            payment_date = (
-                (
+                period_start = f"{year}-{month:02d}-01"
+
+                period_end = (
+                    f"{year}-{month:02d}-"
+                    f"{_last(year, month):02d}"
+                )
+
+                due_date = (
                     date(
                         year,
                         month,
                         _last(year, month),
                     )
-                    + timedelta(days=5)
+                    + timedelta(days=12)
                 ).isoformat()
-                + "T10:30:00"
-            )
 
-            if status == "PAID":
-                payments.append(
+                bills.append(
                     (
-                        _id("PAY", payment_number),
                         bill_id,
                         customer[0],
+                        subscription_id,
+                        period_start,
+                        period_end,
                         total,
-                        payment_date,
-                        "UPI",
-                        "SUCCESS",
-                        f"TXN2026{payment_number:06d}",
+                        due_date,
+                        status,
                     )
                 )
-                payment_number += 1
 
-            elif customer_index == 2 and month == 9:
-                payments.append(
-                    (
-                        _id("PAY", payment_number),
-                        bill_id,
-                        customer[0],
-                        total,
-                        payment_date,
-                        "CREDIT_CARD",
-                        "FAILED",
-                        f"TXN2026{payment_number:06d}",
+                for description, amount, item_type in charges:
+                    items.append(
+                        (
+                            _id("ITEM", item_number),
+                            bill_id,
+                            description,
+                            amount,
+                            item_type,
+                        )
                     )
-                )
-                payment_number += 1
+                    item_number += 1
 
-            elif customer_index == 6 and month == 9:
-                payments.append(
-                    (
-                        _id("PAY", payment_number),
-                        bill_id,
-                        customer[0],
-                        round(total * 0.45, 2),
-                        payment_date,
-                        "UPI",
-                        "SUCCESS",
-                        f"TXN2026{payment_number:06d}",
-                    )
+                payment_number = _append_payment_for_bill(
+                    payments,
+                    payment_number,
+                    bill_id,
+                    customer[0],
+                    customer_index,
+                    total,
+                    status,
+                    year,
+                    month,
+                    due_date,
+                    plan,
                 )
-                payment_number += 1
 
-            elif customer_index == 8 and month == 9:
-                payments.append(
-                    (
-                        _id("PAY", payment_number),
-                        bill_id,
-                        customer[0],
-                        total,
-                        payment_date,
-                        "NET_BANKING",
-                        "PENDING",
-                        f"TXN2026{payment_number:06d}",
-                    )
-                )
-                payment_number += 1
-
-            elif customer_index == 15 and month == 9:
-                payments.append(
-                    (
-                        _id("PAY", payment_number),
-                        bill_id,
-                        customer[0],
-                        total,
-                        payment_date,
-                        "DEBIT_CARD",
-                        "FAILED",
-                        f"TXN2026{payment_number:06d}",
-                    )
-                )
-                payment_number += 1
-
-        # Failed-then-successful-retry scenario for
-        # CUST009's June bill.
         if customer_index == 9:
             target = [
                 bill
                 for bill in bills
                 if bill[1] == customer[0]
-                and bill[2] == "2026-06-01"
+                and bill[3] == "2026-06-01"
             ][0]
 
             payments.append(
@@ -715,18 +1351,19 @@ def _billing(connection: sqlite3.Connection) -> None:
                     _id("PAY", payment_number),
                     target[0],
                     customer[0],
-                    target[4],
+                    target[5],
                     "2026-07-02T09:15:00",
                     "CREDIT_CARD",
                     "FAILED",
                     f"TXN2026{payment_number:06d}",
+                    "BANK_TIMEOUT",
                 )
             )
 
             payment_number += 1
 
     connection.executemany(
-        "INSERT INTO bills VALUES (?,?,?,?,?,?,?)",
+        "INSERT INTO bills VALUES (?,?,?,?,?,?,?,?)",
         bills,
     )
 
@@ -736,7 +1373,7 @@ def _billing(connection: sqlite3.Connection) -> None:
     )
 
     connection.executemany(
-        "INSERT INTO payments VALUES (?,?,?,?,?,?,?,?)",
+        "INSERT INTO payments VALUES (?,?,?,?,?,?,?,?,?)",
         payments,
     )
 
@@ -750,8 +1387,9 @@ def _tickets(connection: sqlite3.Connection) -> None:
             (
                 "BILLING",
                 (
-                    "Customer reported unexpected "
-                    "international roaming charges."
+                    "SR#NX-2026-4412: Bill dispute — "
+                    "unexpected international roaming on "
+                    "September invoice."
                 ),
                 "OPEN",
                 "HIGH",
@@ -761,8 +1399,8 @@ def _tickets(connection: sqlite3.Connection) -> None:
             (
                 "NETWORK",
                 (
-                    "Intermittent mobile data reported "
-                    "while travelling."
+                    "SR#NX-2026-2287: Mobile data drops "
+                    "while travelling (4G handoff)."
                 ),
                 "RESOLVED",
                 "MEDIUM",
@@ -797,7 +1435,10 @@ def _tickets(connection: sqlite3.Connection) -> None:
         4: [
             (
                 "PAYMENT",
-                "Payment failed and bill remains overdue.",
+                (
+                    "SR#NX-2026-5103: Auto-debit failed; "
+                    "September bill overdue on suspended line."
+                ),
                 "IN_PROGRESS",
                 "HIGH",
                 "2026-09-16T10:30:00",
@@ -883,11 +1524,21 @@ def _tickets(connection: sqlite3.Connection) -> None:
             )
 
         for entry in entries:
+            related_bill = None
+            related_payment = None
+            if (
+                customer_index == 2
+                and entry[0] == "BILLING"
+            ):
+                related_bill = "BILL027"
+                related_payment = "PAY025"
             rows.append(
                 (
                     _id("TKT", ticket_number),
                     customer[0],
                     *entry,
+                    related_bill,
+                    related_payment,
                 )
             )
             ticket_number += 1
@@ -895,7 +1546,46 @@ def _tickets(connection: sqlite3.Connection) -> None:
     connection.executemany(
         """
         INSERT INTO support_tickets
-        VALUES (?,?,?,?,?,?,?,?)
+        VALUES (?,?,?,?,?,?,?,?,?,?)
+        """,
+        rows,
+    )
+
+
+def _ticket_updates(
+    connection: sqlite3.Connection,
+) -> None:
+    rows = [
+        (
+            "UPD001",
+            "TKT003",
+            "CUST002",
+            "2026-06-11T09:00:00",
+            "OPEN",
+            "Ticket opened for intermittent mobile data.",
+        ),
+        (
+            "UPD002",
+            "TKT003",
+            "CUST002",
+            "2026-06-11T14:30:00",
+            "IN_PROGRESS",
+            "Network team investigating tower handoff.",
+        ),
+        (
+            "UPD003",
+            "TKT003",
+            "CUST002",
+            "2026-06-12T16:00:00",
+            "RESOLVED",
+            "Roaming profile refreshed; data restored.",
+        ),
+    ]
+
+    connection.executemany(
+        """
+        INSERT INTO support_ticket_updates
+        VALUES (?,?,?,?,?,?)
         """,
         rows,
     )
@@ -989,6 +1679,7 @@ def _drop_tables(
 ) -> None:
     tables = [
         "devices",
+        "support_ticket_updates",
         "support_tickets",
         "payments",
         "bill_items",
@@ -996,6 +1687,8 @@ def _drop_tables(
         "usage",
         "subscriptions",
         "plans",
+        "customer_payment_profiles",
+        "account_credits",
         "customers",
     ]
 

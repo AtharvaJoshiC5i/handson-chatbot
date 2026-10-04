@@ -5,6 +5,9 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from app.api.routes.chat import router as chat_router
+from app.api.routes.data_explorer import (
+    router as data_explorer_router,
+)
 from app.api.routes.health import router as health_router
 from app.config.settings import get_settings
 
@@ -26,5 +29,10 @@ app.include_router(
 
 app.include_router(
     chat_router,
+    prefix="/api",
+)
+
+app.include_router(
+    data_explorer_router,
     prefix="/api",
 )

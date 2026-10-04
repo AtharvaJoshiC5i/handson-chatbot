@@ -62,6 +62,15 @@ class ScriptedIntentClient:
                 ),
             )
 
+        if "how much is left" in text:
+            return LLMIntentResponse(
+                intent=Intent.GET_USAGE_REMAINING,
+                parameters=IntentParameters(
+                    usage_type=UsageType.DATA,
+                    time_range=TimeRange.CURRENT_MONTH,
+                ),
+            )
+
         if "open tickets" in text:
             return LLMIntentResponse(
                 intent=Intent.GET_SUPPORT_TICKETS,
@@ -251,9 +260,9 @@ def test_usage_remaining_last_month_and_explicit_comparison(
     assert previous.status == "VERIFIED"
     assert this_month.status == "VERIFIED"
     assert comparison.status == "VERIFIED"
-    assert "August" in previous.message
-    assert "September" in this_month.message
-    assert "September" in comparison.message
+    assert "September" in previous.message
+    assert "October" in this_month.message
+    assert "October" in comparison.message
     assert "August" in comparison.message
 
 
@@ -370,7 +379,7 @@ def test_topic_switch_changes_followup_domain(
 
     assert usage.status == "VERIFIED"
     assert previous.status == "VERIFIED"
-    assert "August" in previous.message
+    assert "September" in previous.message
 
 
 def test_explicit_period_overrides_previous_period(
@@ -502,7 +511,7 @@ def test_customer_context_does_not_leak_through_chat_service(
         "customer-bound",
         CustomerContext(customer_id="CUST002"),
     )
-    assert before.referenced_bill_id == "BILL014"
+    assert before.referenced_bill_id == "BILL027"
 
     new_customer_context = conversation_service.get_context(
         "customer-bound",
@@ -580,10 +589,14 @@ def test_manager_demo_conversation_uses_canonical_seed_data(
     assert "recorded as failed" in responses[4].message
     assert "billing-category" in responses[5].message
     assert "NexaMax 799" in responses[6].message
-    assert "54 GB" in responses[7].message
+    assert "October 2026" in responses[7].message
     assert "21 GB" in responses[8].message
-    assert "Samsung Galaxy S24" in responses[9].message
-    assert "failed" in responses[10].message
+    assert responses[9].presentation is not None
+    assert responses[9].presentation.type == "customer_360"
+    assert "Samsung Galaxy S24" in str(
+        responses[9].presentation.model_dump(),
+    )
+    assert "failed" in responses[10].message.lower()
 
 
 def test_reset_endpoint_clears_customer_conversation_context() -> None:

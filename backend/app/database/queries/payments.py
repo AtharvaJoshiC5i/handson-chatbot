@@ -13,7 +13,8 @@ PAYMENT_FIELDS = """
     payment_date,
     payment_method,
     status,
-    transaction_reference
+    transaction_reference,
+    failure_reason
 """
 
 

@@ -44,6 +44,10 @@ PERIOD = (
     "year",
 )
 
+PLAN_TYPE = (
+    "plan_type",
+)
+
 
 INTENT_DEFINITIONS = (
     # Account / plan
@@ -60,16 +64,49 @@ INTENT_DEFINITIONS = (
         "get_plan_renewal",
     ),
 
+    _definition(
+        Intent.GET_LIST_SUBSCRIPTIONS,
+        "get_list_subscriptions",
+    ),
+    _definition(
+        Intent.GET_PLAN_CATALOG,
+        "get_plan_catalog",
+        optional=PLAN_TYPE,
+    ),
+    _definition(
+        Intent.GET_PLAN_COMPARISON,
+        "get_plan_comparison",
+        required=(
+            "plan_id",
+            "comparison_plan_id",
+        ),
+    ),
+
+
     # Phase 1 — usage
     _definition(
         Intent.GET_DATA_USAGE,
         "get_data_usage",
-        optional=PERIOD,
+        optional=(
+            *PERIOD,
+            *PLAN_TYPE,
+        ),
     ),
     _definition(
         Intent.GET_VOICE_USAGE,
         "get_voice_usage",
-        optional=PERIOD,
+        optional=(
+            *PERIOD,
+            *PLAN_TYPE,
+        ),
+    ),
+    _definition(
+        Intent.GET_SMS_USAGE,
+        "get_sms_usage",
+        optional=(
+            *PERIOD,
+            *PLAN_TYPE,
+        ),
     ),
     _definition(
         Intent.GET_USAGE_REMAINING,
@@ -93,7 +130,10 @@ INTENT_DEFINITIONS = (
     _definition(
         Intent.GET_USAGE_SUMMARY,
         "get_usage_summary",
-        optional=PERIOD,
+        optional=(
+            *PERIOD,
+            *PLAN_TYPE,
+        ),
     ),
     _definition(
         Intent.GET_USAGE_HISTORY,
@@ -103,6 +143,7 @@ INTENT_DEFINITIONS = (
         ),
         optional=(
             "month_count",
+            *PLAN_TYPE,
         ),
     ),
     _definition(
@@ -154,17 +195,22 @@ INTENT_DEFINITIONS = (
     _definition(
         Intent.GET_CURRENT_BILL,
         "get_current_bill",
+        optional=PLAN_TYPE,
     ),
     _definition(
         Intent.GET_SPECIFIC_BILL,
         "get_specific_bill",
-        optional=PERIOD,
+        optional=(
+            *PERIOD,
+            *PLAN_TYPE,
+        ),
     ),
     _definition(
         Intent.GET_BILL_HISTORY,
         "get_bill_history_for_customer",
         optional=(
             "limit",
+            *PLAN_TYPE,
         ),
     ),
     _definition(
@@ -241,8 +287,21 @@ INTENT_DEFINITIONS = (
             "minimum_amount",
             "sort_order",
             "limit",
+            *PLAN_TYPE,
         ),
     ),
+    _definition(
+        Intent.GET_BILL_CHARGE_SUMMARY,
+        "get_bill_charge_summary",
+        required=("bill_item_type",),
+        optional=("month_count", *PLAN_TYPE),
+    ),
+    _definition(
+        Intent.GET_PROJECTED_BILL,
+        "get_projected_bill",
+        optional=PLAN_TYPE,
+    ),
+
 
     # Phase 3 — payments
     _definition(
@@ -325,6 +384,15 @@ INTENT_DEFINITIONS = (
             "month_count",
         ),
     ),
+    _definition(
+        Intent.GET_PAYMENT_PROFILE,
+        "get_payment_profile_status",
+    ),
+    _definition(
+        Intent.GET_ACCOUNT_CREDITS,
+        "get_account_credits",
+    ),
+
 
     # Phase 4 — support
     _definition(
@@ -384,6 +452,13 @@ INTENT_DEFINITIONS = (
     _definition(
         Intent.GET_SUPPORT_LAST_UPDATED,
         "get_latest_ticket_update",
+        optional=(
+            "ticket_id",
+        ),
+    ),
+    _definition(
+        Intent.GET_SUPPORT_TICKET_UPDATES,
+        "get_support_ticket_updates",
         optional=(
             "ticket_id",
         ),

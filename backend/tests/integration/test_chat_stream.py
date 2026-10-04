@@ -21,7 +21,12 @@ class FakeStreamingClient:
             parameters=IntentParameters(),
         )
 
-    def generate_response_stream(self, backend_output: str):
+    def generate_response_stream(
+        self,
+        backend_output: str,
+        *,
+        max_tokens: int | None = None,
+    ):
         self.backend_output = backend_output
         yield "Your account "
         yield "is active."
@@ -110,7 +115,11 @@ def test_customer_profile_returns_name_from_selected_account() -> None:
             )
 
         assert response.status_code == 200
-        assert response.json() == {"name": "Aarav Sharma"}
+        body = response.json()
+        assert body["name"] == "Aarav Sharma"
+        assert body["account_status"] == "ACTIVE"
+        assert "phone_masked" in body
+        assert "city" in body
     finally:
         app.dependency_overrides.clear()
         app.dependency_overrides.update(original_overrides)

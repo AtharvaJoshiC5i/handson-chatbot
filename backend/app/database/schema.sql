@@ -11,6 +11,9 @@ CREATE TABLE IF NOT EXISTS customers (
     email TEXT NOT NULL UNIQUE,
     phone_number TEXT NOT NULL UNIQUE,
     city TEXT NOT NULL,
+    service_address_line TEXT NOT NULL DEFAULT '',
+    service_state TEXT NOT NULL DEFAULT '',
+    service_postal_code TEXT NOT NULL DEFAULT '',
     account_status TEXT NOT NULL
         CHECK (account_status IN (
             'ACTIVE',
@@ -93,6 +96,7 @@ CREATE TABLE IF NOT EXISTS usage (
 CREATE TABLE IF NOT EXISTS bills (
     bill_id TEXT PRIMARY KEY,
     customer_id TEXT NOT NULL,
+    subscription_id TEXT NOT NULL,
     billing_period_start TEXT NOT NULL,
     billing_period_end TEXT NOT NULL,
     amount REAL NOT NULL CHECK (amount >= 0),
@@ -107,6 +111,9 @@ CREATE TABLE IF NOT EXISTS bills (
 
     FOREIGN KEY (customer_id)
         REFERENCES customers(customer_id),
+
+    FOREIGN KEY (subscription_id)
+        REFERENCES subscriptions(subscription_id),
 
     CHECK (billing_period_end >= billing_period_start)
 );
@@ -160,6 +167,16 @@ CREATE TABLE IF NOT EXISTS payments (
             'PENDING'
         )),
     transaction_reference TEXT NOT NULL UNIQUE,
+    failure_reason TEXT
+        CHECK (
+            failure_reason IS NULL
+            OR failure_reason IN (
+                'INSUFFICIENT_FUNDS',
+                'CARD_DECLINED',
+                'BANK_TIMEOUT',
+                'ACCOUNT_CLOSED'
+            )
+        ),
 
     FOREIGN KEY (bill_id)
         REFERENCES bills(bill_id),
@@ -202,6 +219,87 @@ CREATE TABLE IF NOT EXISTS support_tickets (
         )),
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
+    related_bill_id TEXT,
+    related_payment_id TEXT,
+
+    FOREIGN KEY (customer_id)
+        REFERENCES customers(customer_id),
+
+    FOREIGN KEY (related_bill_id)
+        REFERENCES bills(bill_id),
+
+    FOREIGN KEY (related_payment_id)
+        REFERENCES payments(payment_id)
+);
+
+
+-- ============================================================
+-- SUPPORT TICKET UPDATES
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS support_ticket_updates (
+    update_id TEXT PRIMARY KEY,
+    ticket_id TEXT NOT NULL,
+    customer_id TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    status TEXT NOT NULL
+        CHECK (status IN (
+            'OPEN',
+            'IN_PROGRESS',
+            'RESOLVED',
+            'CLOSED'
+        )),
+    note TEXT NOT NULL,
+
+    FOREIGN KEY (ticket_id)
+        REFERENCES support_tickets(ticket_id),
+
+    FOREIGN KEY (customer_id)
+        REFERENCES customers(customer_id)
+);
+
+
+-- ============================================================
+-- CUSTOMER PAYMENT PROFILES
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS customer_payment_profiles (
+    customer_id TEXT PRIMARY KEY,
+    autopay_enabled INTEGER NOT NULL DEFAULT 0
+        CHECK (autopay_enabled IN (0, 1)),
+    default_payment_method TEXT
+        CHECK (
+            default_payment_method IS NULL
+            OR default_payment_method IN (
+                'UPI',
+                'CREDIT_CARD',
+                'DEBIT_CARD',
+                'NET_BANKING'
+            )
+        ),
+    payment_method_label TEXT,
+
+    FOREIGN KEY (customer_id)
+        REFERENCES customers(customer_id)
+);
+
+
+-- ============================================================
+-- ACCOUNT CREDITS
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS account_credits (
+    credit_id TEXT PRIMARY KEY,
+    customer_id TEXT NOT NULL,
+    amount REAL NOT NULL CHECK (amount > 0),
+    reason TEXT NOT NULL,
+    credit_date TEXT NOT NULL,
+    status TEXT NOT NULL
+        CHECK (status IN (
+            'AVAILABLE',
+            'APPLIED',
+            'EXPIRED'
+        )),
 
     FOREIGN KEY (customer_id)
         REFERENCES customers(customer_id)
@@ -250,6 +348,9 @@ CREATE INDEX IF NOT EXISTS idx_usage_subscription
 CREATE INDEX IF NOT EXISTS idx_bills_customer_period
     ON bills(customer_id, billing_period_end);
 
+CREATE INDEX IF NOT EXISTS idx_bills_customer_subscription
+    ON bills(customer_id, subscription_id);
+
 CREATE INDEX IF NOT EXISTS idx_bill_items_bill
     ON bill_items(bill_id);
 
@@ -262,5 +363,11 @@ CREATE INDEX IF NOT EXISTS idx_payments_bill
 CREATE INDEX IF NOT EXISTS idx_support_tickets_customer_status
     ON support_tickets(customer_id, status);
 
+CREATE INDEX IF NOT EXISTS idx_support_ticket_updates_ticket
+    ON support_ticket_updates(ticket_id, updated_at);
+
 CREATE INDEX IF NOT EXISTS idx_devices_customer
     ON devices(customer_id);
+
+CREATE INDEX IF NOT EXISTS idx_account_credits_customer
+    ON account_credits(customer_id, credit_date);

@@ -13,7 +13,9 @@ SUPPORT_TICKET_FIELDS = """
     status,
     priority,
     created_at,
-    updated_at
+    updated_at,
+    related_bill_id,
+    related_payment_id
 """
 
 
@@ -246,4 +248,32 @@ def get_support_category_counts(
             category ASC
         """,
         (customer_id,),
+    ).fetchall()
+
+
+def get_support_ticket_updates(
+    db: sqlite3.Connection,
+    customer_id: str,
+    ticket_id: str,
+) -> list[sqlite3.Row]:
+    """Return structured update history for one customer-owned ticket."""
+
+    return db.execute(
+        """
+        SELECT
+            update_id,
+            ticket_id,
+            customer_id,
+            updated_at,
+            status,
+            note
+        FROM support_ticket_updates
+        WHERE customer_id = ?
+          AND ticket_id = ?
+        ORDER BY updated_at ASC, update_id ASC
+        """,
+        (
+            customer_id,
+            ticket_id,
+        ),
     ).fetchall()

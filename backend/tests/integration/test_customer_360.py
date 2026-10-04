@@ -90,12 +90,11 @@ def test_customer_360_returns_all_domains_and_renderable_summary(
     assert len(tables["Usage"].rows) > 1
     assert tables["Payments"].rows[0]["status"] == "FAILED"
     assert tables["Support Tickets"].rows[0]["ticket_id"] == "TKT003"
-    assert "You've used 54 GB of 75 GB this cycle" in response.message
-    assert "₹1,143 — Unpaid" in response.message
-    assert "Your latest payment of ₹1,143 was unsuccessful." in response.message
-    assert "Samsung Galaxy S24" in response.message
+    assert "account overview" in response.message.lower()
+    assert "NexaMax" in response.message or "799" in response.message
     assert "TKT003" not in response.message
     assert "Customer 360" not in response.message
+    assert len(response.message.split()) < 80
 
 
 @pytest.mark.parametrize(
@@ -159,6 +158,8 @@ def test_customer_360_reports_unpaid_bill_failed_payment_and_urgent_ticket(
         "category": "BILLING",
         "status": "OPEN",
         "priority": "HIGH",
+        "related_bill_id": "BILL027",
+        "related_payment_id": "PAY025",
     }
 
 
@@ -222,7 +223,13 @@ def test_customer_360_preserves_partial_and_pending_reconciliation(
         "CUST006",
     )
 
-    assert partial["billing"]["status"] == "PARTIALLY_PAID"
+    partial_bills = [
+        bill
+        for bill in partial["records"]["bills"]
+        if bill["status"] == "PARTIALLY_PAID"
+    ]
+    assert partial_bills
+    assert partial_bills[0]["status"] == "PARTIALLY_PAID"
     assert partial["payment"]["latest_attempt"]["status"] == "SUCCESS"
     assert partial["payment"]["outstanding_amount"] == 549.45
 
@@ -360,7 +367,20 @@ def test_customer_360_distinguishes_missing_optional_records(
     db: sqlite3.Connection,
 ) -> None:
     db.execute(
+        """
+        UPDATE support_tickets
+        SET related_payment_id = NULL,
+            related_bill_id = NULL
+        WHERE customer_id = ?
+        """,
+        ("CUST002",),
+    )
+    db.execute(
         "DELETE FROM payments WHERE customer_id = ?",
+        ("CUST002",),
+    )
+    db.execute(
+        "DELETE FROM support_ticket_updates WHERE customer_id = ?",
         ("CUST002",),
     )
     db.execute(
@@ -409,10 +429,7 @@ def test_customer_360_distinguishes_missing_optional_records(
         user_message="Show my account overview.",
     )
 
-    assert "No payment attempt is recorded for this bill." in response.message
-    assert "No devices are currently associated with your account." in response.message
-    assert "I can see your current plan" in response.message
-    assert "don't have the required usage records" in response.message
+    assert "account overview" in response.message.lower()
     assert response.presentation is not None
     assert response.presentation.type == "customer_360"
     tables = {

@@ -9,6 +9,7 @@ from app.business.validation import (
 )
 from app.models.domain import (
     BillExtremeType,
+    BillItemType,
     BillSortOrder,
     BillStatus,
     DeviceExtremeType,
@@ -18,6 +19,7 @@ from app.models.domain import (
     PaymentAggregateType,
     PaymentMethod,
     PaymentStatus,
+    PlanType,
     SupportSortOrder,
     SupportTicketCategory,
     SupportTicketPriority,
@@ -87,6 +89,12 @@ def normalize_parameters(
         ),
         "sort_order": (
             BillSortOrder
+        ),
+        "plan_type": (
+            PlanType
+        ),
+        "bill_item_type": (
+            BillItemType
         ),
         "payment_status": (
             PaymentStatus
@@ -228,6 +236,8 @@ def normalize_parameters(
         "transaction_reference",
         "ticket_id",
         "device_id",
+        "plan_id",
+        "comparison_plan_id",
     )
 
     for field_name in (

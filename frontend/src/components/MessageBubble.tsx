@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import {
-  ArrowUpRight,
   Check,
   Copy,
 } from "lucide-react";
@@ -10,12 +9,36 @@ import remarkGfm from "remark-gfm";
 
 import type { ChatMessage } from "../types/chat";
 
+import { AnswerTrustFooter } from "./AnswerTrustFooter";
+import { RichOptionCard } from "./RichOptionCard";
 import { StructuredPresentation } from "./StructuredPresentation";
+import { SuggestedFollowUps } from "./SuggestedFollowUps";
+import { suggestedFollowUps } from "../utils/followUps";
 
 interface MessageBubbleProps {
   message: ChatMessage;
+  showFollowUps?: boolean;
+  userMessageForFollowUps?: string;
   onOptionSelect?: (message: string) => void;
   optionsDisabled?: boolean;
+}
+
+function shouldShowNarrativeLead(
+  message: ChatMessage,
+): boolean {
+  if (!message.content.trim()) {
+    return false;
+  }
+
+  if (!message.presentation) {
+    return true;
+  }
+
+  if (message.status !== "VERIFIED") {
+    return true;
+  }
+
+  return false;
 }
 
 function formatTime(date: Date) {
@@ -131,6 +154,8 @@ function AssistantMarkdown({
 
 export function MessageBubble({
   message,
+  showFollowUps = false,
+  userMessageForFollowUps = "",
   onOptionSelect,
   optionsDisabled = false,
 }: MessageBubbleProps) {
@@ -144,8 +169,19 @@ export function MessageBubble({
   const isUser =
     message.role === "user";
 
-  const isCustomerOverview =
-    message.presentation?.type === "customer_360";
+  const showNarrativeLead = shouldShowNarrativeLead(
+    message,
+  );
+
+  const followUps =
+    showFollowUps
+    && !message.isStreaming
+    && message.status === "VERIFIED"
+      ? suggestedFollowUps(
+          message.presentation,
+          userMessageForFollowUps,
+        )
+      : [];
 
   const handleCopy =
     async () => {
@@ -177,7 +213,7 @@ export function MessageBubble({
     return (
       <div className="group flex w-full justify-end">
         <div className="max-w-[88%] sm:max-w-[76%]">
-          <div className="rounded-xl rounded-br-sm bg-[#e8f0ea] px-4 py-3 text-[13px] leading-[1.65] text-[#243a2e]">
+          <div className="rounded-2xl rounded-br-md border border-[var(--color-line)] bg-white px-4 py-2.5 text-[13px] leading-relaxed text-[var(--color-ink)] shadow-sm">
             <p className="whitespace-pre-wrap break-words">
               {message.content}
             </p>
@@ -245,7 +281,7 @@ export function MessageBubble({
 
   return (
     <div className="group w-full min-w-0">
-      {message.content ? (
+      {showNarrativeLead ? (
         <AssistantMarkdown content={message.content} />
       ) : message.isStreaming ? (
         <div className="flex h-7 items-center gap-1.5" role="status" aria-label="Response is being generated">
@@ -262,36 +298,39 @@ export function MessageBubble({
         />
       )}
 
-      {message.presentation && !isCustomerOverview && (
+      {message.presentation && (
         <div className="mt-4 min-w-0">
-            <StructuredPresentation presentation={message.presentation} />
+          <StructuredPresentation
+            presentation={message.presentation}
+            onEntitySelect={onOptionSelect}
+          />
         </div>
+      )}
+
+      {!message.isStreaming && (
+        <AnswerTrustFooter
+          status={message.status}
+          source={message.source}
+        />
+      )}
+
+      {followUps.length > 0 && (
+        <SuggestedFollowUps
+          suggestions={followUps}
+          disabled={optionsDisabled}
+          onSelect={(text) => onOptionSelect?.(text)}
+        />
       )}
 
       {message.options && message.options.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">
           {message.options.map((option) => (
-            <button
+            <RichOptionCard
               key={option.message}
-              type="button"
+              option={option}
               disabled={optionsDisabled}
-              onClick={() => onOptionSelect?.(option.message)}
-              className={[
-                "group/option inline-flex min-h-9 items-center gap-1.5 rounded-md border border-[#dce6de]",
-                "bg-white px-3 py-2 text-left text-[11px] font-medium text-[#345342] transition-colors",
-                "hover:border-[#aec4b3] hover:bg-[#f5f8f5] hover:text-[#1f4030]",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#6d9279] focus-visible:ring-offset-2",
-                "disabled:pointer-events-none disabled:opacity-40",
-              ].join(" ")}
-            >
-              <span>{option.label}</span>
-              <ArrowUpRight
-                size={12}
-                strokeWidth={1.8}
-                className="shrink-0 text-[#91a197] transition-colors group-hover/option:text-[#345342]"
-                aria-hidden="true"
-              />
-            </button>
+              onSelect={(text) => onOptionSelect?.(text)}
+            />
           ))}
         </div>
       )}

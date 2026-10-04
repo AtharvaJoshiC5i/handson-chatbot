@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from app.database.connection import create_connection
-from app.intent.router import IntentRouter
 from app.models.domain import (
     CustomerContext,
     Intent,
@@ -20,7 +19,6 @@ from app.models.llm import (
     LLMIntentResponse,
 )
 from app.services.chat_service import ChatService
-from app.services.response_service import ResponseService
 from app.truth.result import TruthResult
 
 
@@ -291,16 +289,14 @@ def _run_single_case(
             llm_client=ReplayEvaluationProvider(
                 llm_result
             ),
-            intent_router=IntentRouter(),
-            response_service=ResponseService(),
         )
 
-        response = service.process_message(
+        response = service.respond(
             db=db,
             customer=CustomerContext(
                 customer_id=case["customer_id"]
             ),
-            message=case["question"],
+            user_message=case["question"],
         )
 
         result["response"] = response.message

@@ -13,8 +13,10 @@ from app.business.dates import (
     resolve_usage_period,
     shift_month,
 )
+from app.business.subscription_scope import (
+    resolve_usage_plan_row,
+)
 from app.database.queries.usage import (
-    get_customer_usage_plan,
     get_monthly_usage_totals,
     get_usage_totals_by_date_range,
 )
@@ -119,26 +121,37 @@ def _resolve_period(
         )
 
 
+
+
 def _get_plan(
     db: sqlite3.Connection,
     customer: CustomerContext,
+    *,
+    plan_type: str | None = None,
 ):
-    return get_customer_usage_plan(
+    plan, error = resolve_usage_plan_row(
         db,
         customer.customer_id,
+        plan_type=plan_type,
     )
+    if error is not None:
+        return None, error
+    return plan, None
 
 
 def _get_period_totals(
     db: sqlite3.Connection,
     customer: CustomerContext,
     period: DateRange,
+    *,
+    subscription_id: str | None,
 ):
     return get_usage_totals_by_date_range(
         db,
         customer.customer_id,
         period.start_date.isoformat(),
         period.end_date.isoformat(),
+        subscription_id=subscription_id,
     )
 
 
@@ -324,6 +337,7 @@ def _single_usage(
     time_range: TimeRange | None = None,
     month: int | None = None,
     year: int | None = None,
+    plan_type: str | None = None,
 ) -> TruthResult[dict]:
     period, error = _resolve_period(
         time_range=time_range,
@@ -334,16 +348,23 @@ def _single_usage(
     if error is not None:
         return error
 
-    try:
-        plan = _get_plan(
-            db,
-            customer,
-        )
+    plan, plan_error = resolve_usage_plan_row(
+        db,
+        customer.customer_id,
+        plan_type=plan_type,
+    )
 
+    if plan_error is not None:
+        return plan_error
+
+    assert plan is not None
+
+    try:
         totals = _get_period_totals(
             db,
             customer,
             period,
+            subscription_id=plan["subscription_id"],
         )
     except sqlite3.Error:
         return database_error_result(
@@ -438,6 +459,7 @@ def get_data_usage(
     time_range: TimeRange | None = None,
     month: int | None = None,
     year: int | None = None,
+    plan_type: str | None = None,
 ) -> TruthResult[dict]:
     return _single_usage(
         db,
@@ -446,6 +468,7 @@ def get_data_usage(
         time_range=time_range,
         month=month,
         year=year,
+        plan_type=plan_type,
     )
 
 
@@ -456,6 +479,7 @@ def get_voice_usage(
     time_range: TimeRange | None = None,
     month: int | None = None,
     year: int | None = None,
+    plan_type: str | None = None,
 ) -> TruthResult[dict]:
     return _single_usage(
         db,
@@ -464,6 +488,27 @@ def get_voice_usage(
         time_range=time_range,
         month=month,
         year=year,
+        plan_type=plan_type,
+    )
+
+
+def get_sms_usage(
+    db: sqlite3.Connection,
+    customer: CustomerContext,
+    *,
+    time_range: TimeRange | None = None,
+    month: int | None = None,
+    year: int | None = None,
+    plan_type: str | None = None,
+) -> TruthResult[dict]:
+    return _single_usage(
+        db,
+        customer,
+        usage_type=UsageType.SMS,
+        time_range=time_range,
+        month=month,
+        year=year,
+        plan_type=plan_type,
     )
 
 
@@ -567,32 +612,25 @@ def get_usage_summary(
         return error
 
     try:
-        plan = _get_plan(
+        plan, plan_error = _get_plan(
             db,
             customer,
         )
+        if plan_error is not None:
+            return plan_error
+        assert plan is not None
 
         totals = _get_period_totals(
             db,
             customer,
             period,
+            subscription_id=plan["subscription_id"],
         )
     except sqlite3.Error:
         return database_error_result(
             message=(
                 "Unable to retrieve your "
                 "usage summary."
-            ),
-        )
-
-    if plan is None:
-        return not_found_result(
-            source=source_for_table(
-                "subscriptions"
-            ),
-            message=(
-                "No subscription information "
-                "was found for your account."
             ),
         )
 
@@ -930,16 +968,26 @@ def get_usage_comparison(
     )
 
     try:
+        plan, plan_error = _get_plan(
+            db,
+            customer,
+        )
+        if plan_error is not None:
+            return plan_error
+        assert plan is not None
+
         primary = _get_period_totals(
             db,
             customer,
             primary_period,
+            subscription_id=plan["subscription_id"],
         )
 
         comparison = _get_period_totals(
             db,
             customer,
             comparison_period,
+            subscription_id=plan["subscription_id"],
         )
     except sqlite3.Error:
         return database_error_result(

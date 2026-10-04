@@ -1,28 +1,26 @@
 import { ChevronDown } from "lucide-react";
 
+import type { DemoCustomer } from "../types/account";
+
 interface CustomerSelectorProps {
   customerId: string;
+  customers: DemoCustomer[];
   onCustomerChange: (customerId: string) => void;
   disabled?: boolean;
 }
 
-const CUSTOMER_IDS = [
-  "CUST001",
-  "CUST002",
-  "CUST003",
-  "CUST004",
-  "CUST005",
-  "CUST006",
-  "CUST007",
-];
-
 export function CustomerSelector({
   customerId,
+  customers,
   onCustomerChange,
   disabled = false,
 }: CustomerSelectorProps) {
+  const options = customers.length > 0
+    ? customers
+    : [{ customer_id: customerId, name: customerId, phone_masked: "" }];
+
   return (
-    <div className="relative inline-flex">
+    <div className="relative inline-flex max-w-[min(100vw-2rem,280px)]">
       <select
         id="customer-selector"
         value={customerId}
@@ -30,23 +28,23 @@ export function CustomerSelector({
         disabled={disabled}
         aria-label="Select customer"
         className={[
-          "h-9 min-w-[116px] appearance-none rounded-md",
-          "border border-[#dce5de] bg-[#fbfcfb]",
+          "h-9 w-full min-w-[160px] appearance-none truncate rounded-lg",
+          "border border-[var(--color-line)] bg-white/90",
           "pl-3 pr-8",
-          "text-[11px] font-semibold tabular-nums text-[#30483c]",
-          "outline-none",
+          "text-[11px] font-semibold text-[var(--color-ink)]",
+          "outline-none shadow-sm",
           "transition-colors duration-150",
-          "hover:border-[#b9cbbd] hover:bg-white",
+          "hover:border-[#b9cbbd]",
           "focus:border-[#71927d]",
-          "focus:ring-2 focus:ring-[#2f654f]/10",
+          "focus:ring-2 focus:ring-[#2f654f]/15",
           "disabled:cursor-not-allowed",
           "disabled:bg-[#f1f4f1]",
           "disabled:text-[#9ba89f]",
         ].join(" ")}
       >
-        {CUSTOMER_IDS.map((id) => (
-          <option key={id} value={id}>
-            {id}
+        {options.map((customer) => (
+          <option key={customer.customer_id} value={customer.customer_id}>
+            {customer.name} · {customer.customer_id}
           </option>
         ))}
       </select>

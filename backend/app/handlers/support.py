@@ -10,6 +10,7 @@ from app.database.queries.support_tickets import (
     get_support_category_counts,
     get_support_ticket_by_id,
     get_support_ticket_counts,
+    get_support_ticket_updates as list_support_ticket_updates,
     get_support_tickets,
 )
 from app.models.domain import (
@@ -65,6 +66,12 @@ def _ticket_dict(
         "updated_at": ticket[
             "updated_at"
         ],
+        "related_bill_id": ticket[
+            "related_bill_id"
+        ] if "related_bill_id" in ticket.keys() else None,
+        "related_payment_id": ticket[
+            "related_payment_id"
+        ] if "related_payment_id" in ticket.keys() else None,
         "is_unresolved": (
             ticket["status"]
             in UNRESOLVED_STATUSES
@@ -716,6 +723,98 @@ def get_support_summary(
     )
 
 
+def get_support_ticket_updates(
+    db: sqlite3.Connection,
+    customer: CustomerContext,
+    *,
+    ticket_id: str | None = None,
+) -> TruthResult[dict]:
+    try:
+        if ticket_id is not None:
+            ticket = get_support_ticket_by_id(
+                db,
+                customer.customer_id,
+                ticket_id,
+            )
+        else:
+            ticket = get_latest_support_ticket(
+                db,
+                customer.customer_id,
+            )
+    except sqlite3.Error:
+        return database_error_result(
+            message=(
+                "Unable to retrieve support ticket updates."
+            ),
+        )
+
+    if ticket is None:
+        return not_found_result(
+            source=source_for_table(
+                "support_tickets"
+            ),
+            message=(
+                "I don't have that support ticket "
+                "in the available records."
+            ),
+        )
+
+    try:
+        updates = list_support_ticket_updates(
+            db,
+            customer.customer_id,
+            ticket["ticket_id"],
+        )
+    except sqlite3.Error:
+        return database_error_result(
+            message=(
+                "Unable to retrieve support ticket updates."
+            ),
+        )
+
+    if not updates:
+        return not_found_result(
+            source=source_for_table(
+                "support_ticket_updates"
+            ),
+            message=(
+                "No structured update history is recorded "
+                f"for ticket {ticket['ticket_id']}."
+            ),
+        )
+
+    return verified_result(
+        {
+            "result_type": (
+                "SUPPORT_TICKET_UPDATES"
+            ),
+            "ticket": _ticket_dict(
+                ticket
+            ),
+            "updates": [
+                {
+                    "update_id": row[
+                        "update_id"
+                    ],
+                    "updated_at": row[
+                        "updated_at"
+                    ],
+                    "status": row[
+                        "status"
+                    ],
+                    "note": row[
+                        "note"
+                    ],
+                }
+                for row in updates
+            ],
+        },
+        source=source_for_table(
+            "support_ticket_updates"
+        ),
+    )
+
+
 def get_latest_ticket_update(
     db: sqlite3.Connection,
     customer: CustomerContext,
@@ -758,6 +857,15 @@ def get_latest_ticket_update(
             ),
         )
 
+    try:
+        updates = list_support_ticket_updates(
+            db,
+            customer.customer_id,
+            ticket["ticket_id"],
+        )
+    except sqlite3.Error:
+        updates = []
+
     return verified_result(
         {
             "result_type": (
@@ -766,7 +874,9 @@ def get_latest_ticket_update(
             "ticket": _ticket_dict(
                 ticket
             ),
-            "update_content_available": False,
+            "update_content_available": bool(
+                updates
+            ),
         },
         source=source_for_table(
             "support_tickets"

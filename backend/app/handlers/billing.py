@@ -7,6 +7,9 @@ from datetime import date
 import sqlite3
 from statistics import mean
 
+from app.business.subscription_scope import (
+    resolve_billing_plan_type,
+)
 from app.database.queries.bills import (
     get_bill_by_id_for_customer,
     get_bill_for_month,
@@ -83,6 +86,12 @@ def _bill_dict(
         "status": bill[
             "status"
         ],
+        "subscription_id": bill[
+            "subscription_id"
+        ],
+        "plan_type": bill[
+            "plan_type"
+        ],
     }
 
 
@@ -93,6 +102,7 @@ def _resolve_bill(
     bill_id: str | None = None,
     month: int | None = None,
     year: int | None = None,
+    plan_type: str | None = None,
 ):
     if bill_id is not None:
         return get_bill_by_id_for_customer(
@@ -113,11 +123,13 @@ def _resolve_bill(
             customer.customer_id,
             resolved_year,
             month,
+            plan_type=plan_type,
         )
 
     return get_latest_bill(
         db,
         customer.customer_id,
+        plan_type=plan_type,
     )
 
 
@@ -166,11 +178,22 @@ def _validated_items(
 def get_current_bill(
     db: sqlite3.Connection,
     customer: CustomerContext,
+    *,
+    plan_type: str | None = None,
 ) -> TruthResult[dict]:
+    ambiguity = resolve_billing_plan_type(
+        db,
+        customer.customer_id,
+        plan_type=plan_type,
+    )
+    if ambiguity is not None:
+        return ambiguity
+
     try:
         bill = get_latest_bill(
             db,
             customer.customer_id,
+            plan_type=plan_type,
         )
     except sqlite3.Error:
         return database_error_result(
@@ -208,6 +231,7 @@ def get_specific_bill(
     month: int | None = None,
     year: int | None = None,
     time_range: TimeRange | None = None,
+    plan_type: str | None = None,
 ) -> TruthResult[dict]:
     if (
         month is None
@@ -246,6 +270,7 @@ def get_specific_bill(
             customer.customer_id,
             resolved_year,
             month,
+            plan_type=plan_type,
         )
     except sqlite3.Error:
         return database_error_result(
@@ -282,6 +307,7 @@ def get_bill_history_for_customer(
     customer: CustomerContext,
     *,
     limit: int | None = None,
+    plan_type: str | None = None,
 ) -> TruthResult[dict]:
     try:
         bills = get_bill_history(
@@ -292,6 +318,7 @@ def get_bill_history_for_customer(
                 if limit is not None
                 else 6
             ),
+            plan_type=plan_type,
         )
     except sqlite3.Error:
         return database_error_result(
@@ -1238,6 +1265,7 @@ def filter_bills(
     minimum_amount: float | None = None,
     sort_order: BillSortOrder | None = None,
     limit: int | None = None,
+    plan_type: str | None = None,
 ) -> TruthResult[dict]:
     try:
         bills = get_filtered_bills(
@@ -1253,6 +1281,7 @@ def filter_bills(
                 minimum_amount
             ),
             limit=limit,
+            plan_type=plan_type,
             sort_order=(
                 sort_order.value
                 if sort_order

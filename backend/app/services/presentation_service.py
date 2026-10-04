@@ -83,6 +83,29 @@ def _label(
     )
 
 
+def _split_datetime_to_date_time(
+    value: Any,
+) -> tuple[str, str]:
+    if value is None or value == "":
+        return "—", "—"
+
+    raw = str(value).strip()
+    if "T" not in raw:
+        return raw, "—"
+
+    date_part, time_part = raw.split(
+        "T",
+        1,
+    )
+    time_part = (
+        time_part.split(".")[0]
+        .split("+")[0]
+        .split("Z")[0]
+        .strip()
+    )
+    return date_part, time_part or "—"
+
+
 def _usage_value(
     value: Any,
     unit: Any,
@@ -152,6 +175,9 @@ class PresentationService:
             ),
             "BILL_FILTER": (
                 self._bill_filter
+            ),
+            "PLAN_RENEWAL": (
+                self._plan_renewal
             ),
 
             # Phase 3
@@ -474,43 +500,61 @@ class PresentationService:
         if chart is not None:
             return chart
 
+        plan_types = {
+            str(bill.get("plan_type", ""))
+            for bill in bills
+            if bill.get("plan_type")
+        }
+        show_line = len(plan_types) > 1
+
         rows = []
 
         for bill in bills:
-            rows.append(
-                {
-                    "period": str(
-                        bill.get(
-                            "period",
-                            "",
-                        )
-                    ),
-                    "amount": _money(
-                        bill.get(
-                            "amount"
-                        )
-                    ),
-                    "status": _label(
-                        bill.get(
-                            "status"
-                        )
-                    ),
-                    "due": str(
-                        bill.get(
-                            "due_date",
-                            "",
-                        )
-                    ),
-                }
-            )
-
-        return TablePresentation(
-            title="Billing history",
-            columns=[
-                TableColumn(
-                    key="period",
-                    label="Period",
+            row = {
+                "period": str(
+                    bill.get(
+                        "period",
+                        "",
+                    )
                 ),
+                "amount": _money(
+                    bill.get(
+                        "amount"
+                    )
+                ),
+                "status": _label(
+                    bill.get(
+                        "status"
+                    )
+                ),
+                "due": str(
+                    bill.get(
+                        "due_date",
+                        "",
+                    )
+                ),
+            }
+            if show_line:
+                row["line"] = _label(
+                    bill.get("plan_type")
+                )
+            rows.append(row)
+
+        columns = [
+            TableColumn(
+                key="period",
+                label="Period",
+            ),
+        ]
+        if show_line:
+            columns.append(
+                TableColumn(
+                    key="line",
+                    label="Line",
+                )
+            )
+        columns.extend(
+            [
                 TableColumn(
                     key="amount",
                     label="Amount",
@@ -524,7 +568,12 @@ class PresentationService:
                     key="due",
                     label="Due",
                 ),
-            ],
+            ]
+        )
+
+        return TablePresentation(
+            title="Billing history",
+            columns=columns,
             rows=rows,
         )
 
@@ -552,17 +601,31 @@ class PresentationService:
         if len(bills) < minimum_points:
             return None
 
+        plan_types = {
+            str(bill.get("plan_type", ""))
+            for bill in bills
+            if bill.get("plan_type")
+        }
+        show_line = len(plan_types) > 1
+
         points = []
         for bill in bills:
             amount = bill.get("amount_value")
             if not isinstance(amount, (int, float)) or isinstance(amount, bool):
                 return None
 
+            detail = _label(bill.get("status"))
+            plan_type = bill.get("plan_type")
+            if show_line and plan_type:
+                detail = (
+                    f"{detail} · {_label(plan_type)}"
+                )
+
             points.append(
                 TimeSeriesPoint(
                     period=str(bill.get("period", "")),
                     value=float(amount),
-                    detail=_label(bill.get("status")),
+                    detail=detail,
                 )
             )
 
@@ -719,6 +782,61 @@ class PresentationService:
         )
 
     # ========================================================
+    # PLAN RENEWAL
+    # ========================================================
+
+    @staticmethod
+    def _plan_renewal(
+        data: dict[str, Any],
+    ) -> ChatPresentation:
+        renewal_raw = str(
+            data.get(
+                "renewal_date",
+                "",
+            )
+        )
+        renewal_display = renewal_raw.split(
+            "T",
+            1,
+        )[0] or renewal_raw
+
+        return KeyValuePresentation(
+            title="Plan renewal",
+            items=[
+                KeyValueItem(
+                    label="Plan",
+                    value=str(
+                        data.get(
+                            "plan_name",
+                            "—",
+                        )
+                    ),
+                ),
+                KeyValueItem(
+                    label="Type",
+                    value=_label(
+                        data.get(
+                            "plan_type",
+                        )
+                    ),
+                ),
+                KeyValueItem(
+                    label="Renewal date",
+                    value=renewal_display
+                    or "—",
+                ),
+                KeyValueItem(
+                    label="Subscription status",
+                    value=_label(
+                        data.get(
+                            "subscription_status",
+                        )
+                    ),
+                ),
+            ],
+        )
+
+    # ========================================================
     # PHASE 3
     # ========================================================
 
@@ -732,14 +850,15 @@ class PresentationService:
             "payments",
             [],
         ):
+            date_display, time_display = _split_datetime_to_date_time(
+                payment.get(
+                    "payment_date",
+                )
+            )
             rows.append(
                 {
-                    "date": str(
-                        payment.get(
-                            "payment_date",
-                            "",
-                        )
-                    ),
+                    "date": date_display,
+                    "time": time_display,
                     "amount": _money(
                         payment.get(
                             "amount"
@@ -764,6 +883,10 @@ class PresentationService:
                 TableColumn(
                     key="date",
                     label="Date",
+                ),
+                TableColumn(
+                    key="time",
+                    label="Time",
                 ),
                 TableColumn(
                     key="amount",
@@ -1436,6 +1559,16 @@ class PresentationService:
             "account",
             {},
         )
+        address_line = account.get(
+            "service_address_line"
+        )
+        account_secondary = None
+        if address_line:
+            city = account.get("city", "")
+            account_secondary = (
+                f"{address_line}, {city}".strip(", ")
+            )
+
         sections.append(
             SummarySection(
                 label="Account",
@@ -1444,6 +1577,7 @@ class PresentationService:
                         "account_status"
                     )
                 ),
+                secondary=account_secondary,
             )
         )
 
@@ -1619,14 +1753,35 @@ class PresentationService:
         important_ticket = support.get(
             "important_ticket"
         )
-        support_secondary = (
-            f"{important_ticket['ticket_id']} · "
-            f"{_label(important_ticket['category'])} · "
-            f"{_label(important_ticket['priority'])} · "
-            f"{_label(important_ticket['status'])}"
-            if important_ticket is not None
-            else None
-        )
+        if important_ticket is not None:
+            support_secondary = (
+                f"{important_ticket['ticket_id']} · "
+                f"{_label(important_ticket['category'])} · "
+                f"{_label(important_ticket['priority'])} · "
+                f"{_label(important_ticket['status'])}"
+            )
+            link_parts: list[str] = []
+            related_bill = important_ticket.get(
+                "related_bill_id"
+            )
+            if related_bill:
+                link_parts.append(
+                    f"Linked bill {related_bill}"
+                )
+            related_payment = important_ticket.get(
+                "related_payment_id"
+            )
+            if related_payment:
+                link_parts.append(
+                    f"Linked payment {related_payment}"
+                )
+            if link_parts:
+                support_secondary = (
+                    f"{support_secondary} · "
+                    f"{'; '.join(link_parts)}"
+                )
+        else:
+            support_secondary = None
 
         sections.append(
             SummarySection(

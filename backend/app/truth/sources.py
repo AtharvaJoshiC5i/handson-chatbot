@@ -40,6 +40,14 @@ _TABLE_SOURCES: dict[str, TruthSource] = {
         source_type=SourceType.SQLITE,
         source_name="sqlite.payments",
     ),
+    "customer_payment_profiles": TruthSource(
+        source_type=SourceType.SQLITE,
+        source_name="sqlite.customer_payment_profiles",
+    ),
+    "account_credits": TruthSource(
+        source_type=SourceType.SQLITE,
+        source_name="sqlite.account_credits",
+    ),
     "support_tickets": TruthSource(
         source_type=SourceType.SQLITE,
         source_name="sqlite.support_tickets",

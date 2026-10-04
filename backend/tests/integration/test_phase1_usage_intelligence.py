@@ -16,6 +16,7 @@ from app.handlers.usage import (
     get_usage_summary,
     get_usage_trend,
     get_voice_usage,
+    get_sms_usage,
 )
 from app.models.domain import (
     CustomerContext,
@@ -125,6 +126,25 @@ def test_named_month_voice_usage_is_aggregated(
 
     assert data["used"] > 0
     assert data["allowance"] == 3000
+    assert data["remaining"] >= 0
+
+
+def test_named_month_sms_usage_is_aggregated(
+    db: sqlite3.Connection,
+):
+    result = get_sms_usage(
+        db,
+        _customer("CUST006"),
+        month=9,
+        year=2026,
+    )
+
+    data = _verified_data(result)
+
+    assert data["usage_type"] == "SMS"
+    assert data["period"] == "September 2026"
+    assert data["used"] > 0
+    assert data["allowance"] == 300
     assert data["remaining"] >= 0
 
 
@@ -459,12 +479,12 @@ def test_heavy_customer_six_month_history(
         item["period_key"]
         for item in history
     ] == [
-        "2026-04",
         "2026-05",
         "2026-06",
         "2026-07",
         "2026-08",
         "2026-09",
+        "2026-10",
     ]
 
     assert [
@@ -472,12 +492,12 @@ def test_heavy_customer_six_month_history(
         for item in history
     ] == pytest.approx(
         [
-            61,
             68,
             74,
             81,
             88,
             94,
+            97,
         ],
         abs=0.01,
     )
@@ -503,9 +523,9 @@ def test_last_three_available_months(
         item["period_key"]
         for item in history
     ] == [
-        "2026-07",
         "2026-08",
         "2026-09",
+        "2026-10",
     ]
 
     assert [
@@ -513,9 +533,9 @@ def test_last_three_available_months(
         for item in history
     ] == pytest.approx(
         [
-            81,
             88,
             94,
+            97,
         ],
         abs=0.01,
     )
@@ -648,12 +668,12 @@ def test_average_uses_monthly_totals(
     data = _verified_data(result)
 
     expected = (
-        61
-        + 68
+        68
         + 74
         + 81
         + 88
         + 94
+        + 97
     ) / 6
 
     assert data["average"] == pytest.approx(
@@ -684,10 +704,10 @@ def test_highest_usage_month(
 
     data = _verified_data(result)
 
-    assert data["period"] == "September 2026"
+    assert data["period"] == "October 2026"
 
     assert data["value"] == pytest.approx(
-        94.0,
+        97.0,
         abs=0.01,
     )
 
@@ -707,10 +727,10 @@ def test_lowest_usage_month(
 
     data = _verified_data(result)
 
-    assert data["period"] == "April 2026"
+    assert data["period"] == "May 2026"
 
     assert data["value"] == pytest.approx(
-        61.0,
+        68.0,
         abs=0.01,
     )
 
@@ -737,16 +757,16 @@ def test_increasing_usage_trend(
         == "GENERALLY_INCREASING"
     )
 
-    assert data["first_period"] == "April 2026"
-    assert data["last_period"] == "September 2026"
+    assert data["first_period"] == "May 2026"
+    assert data["last_period"] == "October 2026"
 
     assert data["first_value"] == pytest.approx(
-        61.0,
+        68.0,
         abs=0.01,
     )
 
     assert data["last_value"] == pytest.approx(
-        94.0,
+        97.0,
         abs=0.01,
     )
 
@@ -799,8 +819,8 @@ def test_over_allowance_never_returns_negative_remaining(
             "USE_OVERAGE_TEST",
             "CUST001",
             "SUB001",
-            "2026-10-05",
-            80.0,
+                "2026-11-05",
+                80.0,
             0,
             0,
         ),
@@ -812,7 +832,7 @@ def test_over_allowance_never_returns_negative_remaining(
         db,
         _customer("CUST001"),
         usage_type=UsageType.DATA,
-        month=10,
+        month=11,
         year=2026,
     )
 
@@ -842,7 +862,7 @@ def test_missing_month_is_not_treated_as_zero(
         db,
         _customer("CUST006"),
         month=1,
-        year=2026,
+        year=2025,
     )
 
     assert result.status == TruthStatus.NOT_FOUND
@@ -865,13 +885,13 @@ def test_cancelled_customer_can_query_historical_usage(
     result = get_data_usage(
         db,
         _customer("CUST007"),
-        month=7,
+        month=2,
         year=2026,
     )
 
     data = _verified_data(result)
 
-    assert data["period"] == "July 2026"
+    assert data["period"] == "February 2026"
 
     assert (
         data["subscription_status"]
@@ -985,10 +1005,12 @@ def test_average_matches_raw_monthly_aggregation(
         ("CUST006",),
     ).fetchall()
 
+    last_six = raw_rows[-6:]
+
     expected = sum(
         row["total"]
-        for row in raw_rows
-    ) / len(raw_rows)
+        for row in last_six
+    ) / len(last_six)
 
     result = get_usage_average(
         db,
