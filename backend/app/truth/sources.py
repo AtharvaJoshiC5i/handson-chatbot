@@ -52,6 +52,10 @@ _TABLE_SOURCES: dict[str, TruthSource] = {
         source_type=SourceType.SQLITE,
         source_name="sqlite.support_tickets",
     ),
+    "support_ticket_updates": TruthSource(
+        source_type=SourceType.SQLITE,
+        source_name="sqlite.support_ticket_updates",
+    ),
     "devices": TruthSource(
         source_type=SourceType.SQLITE,
         source_name="sqlite.devices",

@@ -277,3 +277,39 @@ def get_support_ticket_updates(
             ticket_id,
         ),
     ).fetchall()
+
+
+def list_all_ticket_updates_for_customer(
+    db: sqlite3.Connection,
+    customer_id: str,
+    *,
+    ticket_id: str | None = None,
+    limit: int = 25,
+) -> list[sqlite3.Row]:
+    """Return ticket update rows for one customer."""
+
+    clauses = ["customer_id = ?"]
+    params: list[object] = [customer_id]
+
+    if ticket_id is not None:
+        clauses.append("ticket_id = ?")
+        params.append(ticket_id)
+
+    params.append(limit)
+
+    return db.execute(
+        f"""
+        SELECT
+            update_id,
+            ticket_id,
+            customer_id,
+            updated_at,
+            status,
+            note
+        FROM support_ticket_updates
+        WHERE {" AND ".join(clauses)}
+        ORDER BY updated_at DESC, update_id DESC
+        LIMIT ?
+        """,
+        params,
+    ).fetchall()

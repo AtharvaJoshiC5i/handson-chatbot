@@ -637,6 +637,13 @@ class ConversationService:
                 "attention",
             }:
                 return self._status_clarification()
+            if active is None:
+                resolved = self._status_intent_from_message(
+                    text,
+                    params,
+                )
+                if resolved is not None:
+                    return resolved
             return self._status_clarification()
 
         month, year = _month_and_year(
@@ -1010,8 +1017,58 @@ class ConversationService:
             )
 
         if active is None and self._asks_status(text):
+            resolved = self._status_intent_from_message(
+                text,
+                params,
+            )
+            if resolved is not None:
+                return resolved
             return self._status_clarification()
 
+        return None
+
+    @staticmethod
+    def _status_intent_from_message(
+        text: str,
+        params: IntentParameters,
+    ) -> LLMIntentResponse | None:
+        if any(
+            phrase in text
+            for phrase in (
+                "payment",
+                "paid",
+                "transaction",
+            )
+        ) and not any(
+            word in text
+            for word in ("ticket", "support", "case")
+        ):
+            return LLMIntentResponse(
+                intent=Intent.GET_PAYMENT_STATUS,
+                parameters=params,
+            )
+        if "bill" in text and "payment" not in text:
+            return LLMIntentResponse(
+                intent=Intent.GET_CURRENT_BILL,
+                parameters=params,
+            )
+        if any(
+            word in text
+            for word in (
+                "ticket",
+                "support",
+                "case",
+            )
+        ):
+            return LLMIntentResponse(
+                intent=Intent.GET_LATEST_SUPPORT_TICKET,
+                parameters=params,
+            )
+        if "subscription" in text or "plan" in text:
+            return LLMIntentResponse(
+                intent=Intent.GET_ACCOUNT_PLAN_STATUS,
+                parameters=params,
+            )
         return None
 
     @staticmethod

@@ -37,7 +37,17 @@ Natural phrasing is fine, but only **supported intents** (see below) return data
 - List my subscriptions.
 - What fiber plans do you offer? / What mobile plans are available?
 - Compare **PLAN001** and **PLAN003**.
+- Show details for plan **PLAN001** (catalog row by ID).
 - Give me a summary of my account and plan.
+- List my **active** subscriptions only. (filter on subscription status)
+- What is my **mobile** plan? / **fiber** plan? (multi-line accounts such as **CUST003**)
+
+**Database explorer parity** (daily rows and line items, not only monthly rollups):
+
+- Show my **daily usage records** / **usage records** for the last **25** days (optional **SUB** id).
+- List **bill line items** across my bills (optional **BILL** id or charge type).
+- List **all support ticket updates** on my account (optional **TKT** id).  
+  For one ticket’s timeline only, ask: “Latest update on ticket **TKT003**” or “Show the timeline for **TKT003**” (`GET_SUPPORT_TICKET_UPDATES`).
 
 ---
 

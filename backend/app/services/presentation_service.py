@@ -233,6 +233,24 @@ class PresentationService:
             "CUSTOMER_360": (
                 self._customer_360
             ),
+            "ACCOUNT_STATUS": (
+                self._account_status
+            ),
+            "CURRENT_PLAN": (
+                self._current_plan
+            ),
+            "PLAN_DETAILS": (
+                self._plan_details
+            ),
+            "USAGE_RECORD_LIST": (
+                self._usage_record_list
+            ),
+            "BILL_ITEM_LIST": (
+                self._bill_item_list
+            ),
+            "TICKET_UPDATE_LIST": (
+                self._ticket_update_list
+            ),
         }
 
         builder = builders.get(
@@ -1545,6 +1563,210 @@ class PresentationService:
                 )
                 for item in items
             ],
+        )
+
+    @staticmethod
+    def _account_status(
+        data: dict[str, Any],
+    ) -> ChatPresentation:
+        return KeyValuePresentation(
+            title="Account",
+            items=[
+                KeyValueItem(
+                    label="Status",
+                    value=_label(data.get("account_status")),
+                ),
+                KeyValueItem(
+                    label="Email",
+                    value=str(data.get("email", "")),
+                ),
+                KeyValueItem(
+                    label="Phone",
+                    value=str(data.get("phone", "")),
+                ),
+                KeyValueItem(
+                    label="City",
+                    value=str(data.get("city", "")),
+                ),
+                KeyValueItem(
+                    label="Address",
+                    value=str(
+                        data.get("service_address_line", "")
+                    ),
+                ),
+                KeyValueItem(
+                    label="Registered",
+                    value=str(
+                        data.get("registration_date", "")
+                    ),
+                ),
+            ],
+        )
+
+    @staticmethod
+    def _current_plan(
+        data: dict[str, Any],
+    ) -> ChatPresentation:
+        allowance = (
+            "Unlimited data"
+            if data.get("is_data_unlimited")
+            else (
+                f"{_number(data.get('data_limit_gb'))} GB"
+            )
+        )
+        return KeyValuePresentation(
+            title="Current plan",
+            items=[
+                KeyValueItem(
+                    label="Plan",
+                    value=str(data.get("plan_name", "")),
+                ),
+                KeyValueItem(
+                    label="Type",
+                    value=_label(data.get("plan_type")),
+                ),
+                KeyValueItem(
+                    label="Price",
+                    value=_money(data.get("monthly_price")),
+                ),
+                KeyValueItem(
+                    label="Data",
+                    value=allowance,
+                ),
+                KeyValueItem(
+                    label="Renews",
+                    value=str(data.get("renewal_date", "")),
+                ),
+            ],
+        )
+
+    @staticmethod
+    def _plan_details(
+        data: dict[str, Any],
+    ) -> ChatPresentation:
+        plan = data.get("plan", {})
+        return KeyValuePresentation(
+            title="Plan details",
+            items=[
+                KeyValueItem(
+                    label="ID",
+                    value=str(plan.get("plan_id", "")),
+                ),
+                KeyValueItem(
+                    label="Name",
+                    value=str(plan.get("plan_name", "")),
+                ),
+                KeyValueItem(
+                    label="Monthly price",
+                    value=_money(plan.get("monthly_price")),
+                ),
+                KeyValueItem(
+                    label="Type",
+                    value=_label(plan.get("plan_type")),
+                ),
+            ],
+        )
+
+    @staticmethod
+    def _usage_record_list(
+        data: dict[str, Any],
+    ) -> ChatPresentation:
+        rows = []
+        for record in data.get("records", []):
+            rows.append(
+                {
+                    "date": str(record.get("usage_date", "")),
+                    "data": _number(record.get("data_used_gb")),
+                    "voice": _number(
+                        record.get("voice_minutes")
+                    ),
+                    "sms": _number(record.get("sms_count")),
+                }
+            )
+        return TablePresentation(
+            title="Usage records",
+            columns=[
+                TableColumn(key="date", label="Date"),
+                TableColumn(key="data", label="Data (GB)"),
+                TableColumn(
+                    key="voice",
+                    label="Voice (min)",
+                ),
+                TableColumn(key="sms", label="SMS"),
+            ],
+            rows=rows,
+        )
+
+    @staticmethod
+    def _bill_item_list(
+        data: dict[str, Any],
+    ) -> ChatPresentation:
+        rows = []
+        for item in data.get("items", []):
+            rows.append(
+                {
+                    "bill_id": str(item.get("bill_id", "")),
+                    "description": str(
+                        item.get("description", "")
+                    ),
+                    "type": _label(item.get("item_type")),
+                    "amount": _money(item.get("amount")),
+                }
+            )
+        return TablePresentation(
+            title="Bill line items",
+            columns=[
+                TableColumn(key="bill_id", label="Bill"),
+                TableColumn(
+                    key="description",
+                    label="Description",
+                ),
+                TableColumn(key="type", label="Type"),
+                TableColumn(
+                    key="amount",
+                    label="Amount",
+                    align="right",
+                ),
+            ],
+            rows=rows,
+        )
+
+    @staticmethod
+    def _ticket_update_list(
+        data: dict[str, Any],
+    ) -> ChatPresentation:
+        rows = []
+        for update in data.get("updates", []):
+            rows.append(
+                {
+                    "ticket_id": str(
+                        update.get("ticket_id", "")
+                    ),
+                    "updated_at": str(
+                        update.get("updated_at", "")
+                    ),
+                    "status": _label(update.get("status")),
+                    "note": str(update.get("note", "")),
+                }
+            )
+        return TablePresentation(
+            title="Ticket updates",
+            columns=[
+                TableColumn(
+                    key="ticket_id",
+                    label="Ticket",
+                ),
+                TableColumn(
+                    key="updated_at",
+                    label="Updated",
+                ),
+                TableColumn(
+                    key="status",
+                    label="Status",
+                ),
+                TableColumn(key="note", label="Note"),
+            ],
+            rows=rows,
         )
 
     @staticmethod

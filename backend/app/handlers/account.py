@@ -41,6 +41,7 @@ def get_account_status(
         )
 
     data = {
+        "result_type": "ACCOUNT_STATUS",
         "customer_id": row["customer_id"],
         "name": row["name"],
         "email": row["email"],
@@ -50,7 +51,7 @@ def get_account_status(
         "service_state": row["service_state"],
         "service_postal_code": row["service_postal_code"],
         "account_status": row["account_status"],
-        "created_at": row["created_at"],
+        "registration_date": row["created_at"],
     }
 
     return verified_result(

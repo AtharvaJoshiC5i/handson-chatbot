@@ -3,7 +3,6 @@ import { lazy, Suspense } from "react";
 import type {
   ChatPresentation,
   ComparisonPresentation,
-  Customer360Presentation,
   KeyValuePresentation,
   ListPresentation,
   SummaryPresentation,
@@ -30,6 +29,8 @@ import {
   TicketTimeline,
 } from "./TicketTimeline";
 import { UsageMeter } from "./UsageMeter";
+import { Customer360View } from "./Customer360View";
+import { chartPresentationShell } from "../lib/presentationStyles";
 
 const TimeSeriesChart = lazy(() =>
   import("./TimeSeriesChart").then((module) => ({
@@ -382,76 +383,6 @@ function SummaryResult({
   );
 }
 
-function Customer360Result({
-  presentation,
-  onEntitySelect,
-}: {
-  presentation: Customer360Presentation;
-  onEntitySelect?: (message: string) => void;
-}) {
-  return (
-    <div className="structured-export space-y-3">
-      <div className="overflow-hidden rounded-lg border border-[#dfe7e0] bg-white shadow-[0_1px_4px_rgba(23,60,50,0.03)]">
-        <PresentationTitle title={presentation.title} />
-
-        <div className="divide-y divide-[#edf1ed]">
-          {presentation.sections.map((section, index) => (
-            <div
-              key={`${section.label}-${index}`}
-              className="grid grid-cols-[84px_minmax(0,1fr)] gap-4 px-4 py-3 sm:grid-cols-[100px_minmax(0,1fr)]"
-            >
-              <p className="text-[11px] font-medium leading-5 text-[#7d8b81]">
-                {section.label}
-              </p>
-
-              <div className="min-w-0">
-                <p className="break-words text-[12px] font-semibold leading-5 text-[#2c4135]">
-                  <StructuredValue
-                    label={section.label}
-                    value={section.primary}
-                    onEntitySelect={onEntitySelect}
-                  />
-                </p>
-
-                {section.secondary && (
-                  <p className="mt-1 break-words text-[11px] leading-5 text-[#7d8b81]">
-                    {section.secondary}
-                  </p>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {presentation.tables.map((table) => (
-        table.rows.length > 0 ? (
-          <TableResult
-            key={table.title}
-            onEntitySelect={onEntitySelect}
-            presentation={{
-              type: "table",
-              title: table.title,
-              columns: table.columns,
-              rows: table.rows,
-            }}
-          />
-        ) : (
-          <div
-            key={table.title}
-            className="overflow-hidden rounded-lg border border-[#dfe7e0] bg-white shadow-[0_1px_4px_rgba(23,60,50,0.03)]"
-          >
-            <PresentationTitle title={table.title} />
-            <p className="px-4 py-3 text-[11px] leading-5 text-[#7d8b81]">
-              No records.
-            </p>
-          </div>
-        )
-      ))}
-    </div>
-  );
-}
-
 export function StructuredPresentation({
   presentation,
   onEntitySelect,
@@ -494,7 +425,7 @@ export function StructuredPresentation({
         <Suspense
           fallback={(
             <div
-              className="h-[340px] animate-pulse rounded-lg border border-[#dfe7e0] bg-white"
+              className={`h-[340px] animate-pulse ${chartPresentationShell}`}
               role="status"
               aria-label="Loading chart"
             />
@@ -511,7 +442,7 @@ export function StructuredPresentation({
 
     case "customer_360":
       return (
-        <Customer360Result
+        <Customer360View
           presentation={presentation}
           onEntitySelect={onEntitySelect}
         />

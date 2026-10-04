@@ -20,6 +20,7 @@ from app.models.domain import (
     PaymentMethod,
     PaymentStatus,
     PlanType,
+    SubscriptionStatus,
     SupportSortOrder,
     SupportTicketCategory,
     SupportTicketPriority,
@@ -92,6 +93,9 @@ def normalize_parameters(
         ),
         "plan_type": (
             PlanType
+        ),
+        "subscription_status": (
+            SubscriptionStatus
         ),
         "bill_item_type": (
             BillItemType
@@ -238,6 +242,7 @@ def normalize_parameters(
         "device_id",
         "plan_id",
         "comparison_plan_id",
+        "subscription_id",
     )
 
     for field_name in (

@@ -426,3 +426,45 @@ def sum_bill_items_by_type(
         sql,
         tuple(params),
     ).fetchone()
+
+
+def list_bill_items_for_customer(
+    db: sqlite3.Connection,
+    customer_id: str,
+    *,
+    bill_id: str | None = None,
+    item_type: str | None = None,
+    limit: int = 25,
+) -> list[sqlite3.Row]:
+    """Return bill line items scoped to one customer."""
+
+    clauses = ["b.customer_id = ?"]
+    params: list[object] = [customer_id]
+
+    if bill_id is not None:
+        clauses.append("i.bill_id = ?")
+        params.append(bill_id)
+
+    if item_type is not None:
+        clauses.append("i.item_type = ?")
+        params.append(item_type)
+
+    params.append(limit)
+
+    return db.execute(
+        f"""
+        SELECT
+            i.bill_item_id,
+            i.bill_id,
+            i.description,
+            i.amount,
+            i.item_type
+        FROM bill_items i
+        JOIN bills b
+          ON b.bill_id = i.bill_id
+        WHERE {" AND ".join(clauses)}
+        ORDER BY b.billing_period_end DESC, i.bill_item_id ASC
+        LIMIT ?
+        """,
+        params,
+    ).fetchall()

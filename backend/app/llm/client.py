@@ -51,7 +51,9 @@ def _extract_count(
     text: str,
 ) -> int | None:
     words = {
+        "two": 2,
         "three": 3,
+        "four": 4,
         "five": 5,
         "six": 6,
     }
@@ -148,6 +150,252 @@ def _apply_recent_period(
         parameters.time_range = (
             TimeRange.CURRENT_YEAR
         )
+
+
+def _usage_clarification_mode(
+    text: str,
+    parameters: IntentParameters,
+) -> str:
+    if any(
+        term in text
+        for term in (
+            "compare",
+            "comparison",
+            "versus",
+            " vs ",
+            "more than",
+            "less than",
+        )
+    ):
+        return "comparison"
+
+    if any(
+        term in text
+        for term in (
+            "remaining",
+            "left",
+            "balance",
+        )
+    ):
+        return "remaining"
+
+    if "percent" in text or "%" in text:
+        return "percentage"
+
+    if "average" in text:
+        return "average"
+
+    if "trend" in text:
+        return "trend"
+
+    if any(
+        term in text
+        for term in (
+            "highest",
+            "most",
+            "lowest",
+            "least",
+        )
+    ):
+        return "extreme"
+
+    if (
+        any(
+            term in text
+            for term in (
+                "history",
+                "each month",
+                "every month",
+                "graph",
+                "graphs",
+                "chart",
+                "charts",
+                "plot",
+                "visual",
+            )
+        )
+        or parameters.month_count is not None
+    ):
+        return "history"
+
+    return "current"
+
+
+def _usage_option_period_clause(
+    text: str,
+    parameters: IntentParameters,
+) -> str:
+    if parameters.month_count is not None:
+        return (
+            f" for the last {parameters.month_count} months"
+        )
+
+    if (
+        parameters.time_range == TimeRange.LAST_MONTH
+        or "last month" in text
+    ):
+        return " for last month"
+
+    if (
+        parameters.time_range == TimeRange.CURRENT_YEAR
+        or "this year" in text
+        or "current year" in text
+    ):
+        return " this year"
+
+    if parameters.month is not None:
+        month_label = month_name[parameters.month]
+        if parameters.year is not None:
+            return f" for {month_label} {parameters.year}"
+        return f" for {month_label}"
+
+    if (
+        parameters.time_range == TimeRange.CURRENT_MONTH
+        or "this month" in text
+        or "current month" in text
+    ):
+        return " this month"
+
+    return ""
+
+
+def _usage_option_message(
+    usage_kind: str,
+    mode: str,
+    period: str,
+) -> str:
+    if usage_kind == "data":
+        if mode == "history":
+            return f"Show my data usage{period}."
+        if mode == "trend":
+            return f"What's my data usage trend{period}?"
+        if mode == "comparison":
+            return f"Compare my data usage{period}."
+        if mode == "remaining":
+            return f"How much data do I have left{period}?"
+        if mode == "average":
+            return f"What's my average monthly data usage{period}?"
+        if mode == "percentage":
+            return f"What percentage of my data allowance have I used{period}?"
+        if mode == "extreme":
+            return f"When did I use the most data{period}?"
+        return f"How much data have I used{period or ' this month'}?"
+
+    if usage_kind == "voice":
+        if mode == "history":
+            return f"Show my voice usage{period}."
+        if mode == "trend":
+            return f"What's my voice usage trend{period}?"
+        if mode == "comparison":
+            return f"Compare my voice usage{period}."
+        if mode == "remaining":
+            return f"How many voice minutes do I have left{period}?"
+        if mode == "average":
+            return f"What's my average monthly voice usage{period}?"
+        if mode == "percentage":
+            return (
+                "What percentage of my voice allowance "
+                f"have I used{period}?"
+            )
+        if mode == "extreme":
+            return f"When did I use the most voice minutes{period}?"
+        return (
+            f"How many voice minutes have I used"
+            f"{period or ' this month'}?"
+        )
+
+    if mode == "history":
+        return f"Show my SMS usage{period}."
+    if mode == "trend":
+        return f"What's my SMS usage trend{period}?"
+    if mode == "comparison":
+        return f"Compare my SMS usage{period}."
+    if mode == "remaining":
+        return f"How many SMS do I have left{period}?"
+    if mode == "average":
+        return f"What's my average monthly SMS usage{period}?"
+    if mode == "percentage":
+        return f"What percentage of my SMS allowance have I used{period}?"
+    if mode == "extreme":
+        return f"When did I send the most SMS{period}?"
+    return f"Show my SMS usage{period or ' this month'}."
+
+
+def _usage_clarification(
+    text: str,
+    parameters: IntentParameters,
+) -> LLMIntentResponse:
+    mode = _usage_clarification_mode(
+        text,
+        parameters,
+    )
+    period = _usage_option_period_clause(
+        text,
+        parameters,
+    )
+
+    if mode == "history":
+        if period:
+            clarification = (
+                f"Which usage would you like me to show"
+                f"{period}: data, voice minutes, or SMS?"
+            )
+        else:
+            clarification = (
+                "Which usage history would you like: "
+                "data, voice minutes, or SMS?"
+            )
+    elif mode == "trend":
+        clarification = (
+            f"Which usage trend should I check{period or ''}: "
+            "data, voice minutes, or SMS?"
+        )
+    elif mode == "comparison":
+        clarification = (
+            "Which usage should I compare: "
+            "data, voice minutes, or SMS?"
+        )
+    elif mode == "remaining":
+        clarification = (
+            "Which allowance should I check: "
+            "data, voice minutes, or SMS?"
+        )
+    else:
+        clarification = (
+            "Which usage would you like me to check: "
+            "data, voice minutes, or SMS?"
+        )
+
+    return LLMIntentResponse(
+        intent=Intent.UNSUPPORTED,
+        clarification=clarification,
+        options=[
+            IntentOption(
+                label="Data usage",
+                message=_usage_option_message(
+                    "data",
+                    mode,
+                    period,
+                ),
+            ),
+            IntentOption(
+                label="Voice usage",
+                message=_usage_option_message(
+                    "voice",
+                    mode,
+                    period,
+                ),
+            ),
+            IntentOption(
+                label="SMS usage",
+                message=_usage_option_message(
+                    "sms",
+                    mode,
+                    period,
+                ),
+            ),
+        ],
+    )
 
 
 # ============================================================
@@ -1118,7 +1366,7 @@ def _classify_usage_request(
 
     if any(term in text for term in ("compare", "comparison", "versus", " vs ", "more than", "less than")):
         if usage_type is None:
-            return _usage_clarification()
+            return _usage_clarification(text, parameters)
         parameters.usage_type = usage_type
         return LLMIntentResponse(
             intent=Intent.GET_USAGE_COMPARISON,
@@ -1127,7 +1375,7 @@ def _classify_usage_request(
 
     if any(term in text for term in ("remaining", "left", "balance")):
         if usage_type is None:
-            return _usage_clarification()
+            return _usage_clarification(text, parameters)
         parameters.usage_type = usage_type
         return LLMIntentResponse(
             intent=Intent.GET_USAGE_REMAINING,
@@ -1136,7 +1384,7 @@ def _classify_usage_request(
 
     if "percent" in text or "%" in text:
         if usage_type is None:
-            return _usage_clarification()
+            return _usage_clarification(text, parameters)
         parameters.usage_type = usage_type
         parameters.percentage_type = (
             UsagePercentageType.REMAINING
@@ -1150,7 +1398,7 @@ def _classify_usage_request(
 
     if "average" in text:
         if usage_type is None:
-            return _usage_clarification()
+            return _usage_clarification(text, parameters)
         parameters.usage_type = usage_type
         return LLMIntentResponse(
             intent=Intent.GET_USAGE_AVERAGE,
@@ -1159,7 +1407,7 @@ def _classify_usage_request(
 
     if "trend" in text:
         if usage_type is None:
-            return _usage_clarification()
+            return _usage_clarification(text, parameters)
         parameters.usage_type = usage_type
         return LLMIntentResponse(
             intent=Intent.GET_USAGE_TREND,
@@ -1168,7 +1416,7 @@ def _classify_usage_request(
 
     if any(term in text for term in ("highest", "most", "lowest", "least")):
         if usage_type is None:
-            return _usage_clarification()
+            return _usage_clarification(text, parameters)
         parameters.usage_type = usage_type
         parameters.extreme_type = (
             UsageExtremeType.LOWEST
@@ -1187,12 +1435,18 @@ def _classify_usage_request(
                 "history",
                 "each month",
                 "every month",
+                "graph",
+                "graphs",
+                "chart",
+                "charts",
+                "plot",
+                "visual",
             )
         )
         or parameters.month_count
     ):
         if usage_type is None:
-            return _usage_clarification()
+            return _usage_clarification(text, parameters)
         parameters.usage_type = usage_type
         parameters.month = None
         parameters.comparison_month = None
@@ -1225,23 +1479,7 @@ def _classify_usage_request(
             parameters=parameters,
         )
 
-    return _usage_clarification()
-
-
-def _usage_clarification() -> LLMIntentResponse:
-    return LLMIntentResponse(
-        intent=Intent.UNSUPPORTED,
-        clarification=(
-            "Which usage would you like me to check: data, voice minutes, or SMS?"
-        ),
-        options=[
-            IntentOption(label="Data usage", message="How much data have I used this month?"),
-            IntentOption(label="Voice usage", message="How many voice minutes have I used this month?"),
-            IntentOption(label="SMS usage", message="Show my SMS usage this month."),
-        ],
-    )
-
-
+    return _usage_clarification(text, parameters)
 
 
 def _classify_billing_service_request(
@@ -1289,6 +1527,137 @@ def _classify_subscription_inventory(
     return None
 
 
+def _classify_explorer_records(
+    text: str,
+) -> LLMIntentResponse | None:
+    parameters = IntentParameters()
+
+    if any(
+        phrase in text
+        for phrase in (
+            "account credit",
+            "account credits",
+            "do i have any credits",
+            "credit balance",
+            "available credits",
+        )
+    ):
+        return LLMIntentResponse(
+            intent=Intent.GET_ACCOUNT_CREDITS,
+            parameters=parameters,
+        )
+
+    if any(
+        phrase in text
+        for phrase in (
+            "autopay",
+            "auto pay",
+            "payment profile",
+            "payment method on file",
+            "card on file",
+            "saved payment method",
+        )
+    ):
+        return LLMIntentResponse(
+            intent=Intent.GET_PAYMENT_PROFILE,
+            parameters=parameters,
+        )
+
+    plan_id_match = re.search(
+        r"\b(PLAN\d+)\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if plan_id_match and any(
+        word in text
+        for word in (
+            "detail",
+            "details",
+            "show plan",
+            "what is plan",
+            "tell me about plan",
+        )
+    ):
+        parameters.plan_id = plan_id_match.group(1).upper()
+        return LLMIntentResponse(
+            intent=Intent.GET_PLAN_DETAILS,
+            parameters=parameters,
+        )
+
+    if any(
+        phrase in text
+        for phrase in (
+            "usage record",
+            "usage records",
+            "daily usage",
+            "raw usage",
+            "list usage rows",
+        )
+    ):
+        limit_match = re.search(
+            r"\b(?:last|show|list)\s+(\d+)\s+(?:usage|records)",
+            text,
+        )
+        if limit_match:
+            parameters.limit = int(limit_match.group(1))
+        sub_match = re.search(
+            r"\b(SUB\d+)\b",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if sub_match:
+            parameters.subscription_id = sub_match.group(1).upper()
+        return LLMIntentResponse(
+            intent=Intent.LIST_USAGE_RECORDS,
+            parameters=parameters,
+        )
+
+    if any(
+        phrase in text
+        for phrase in (
+            "bill line item",
+            "bill line items",
+            "bill items",
+            "line items on my bills",
+            "list bill items",
+        )
+    ):
+        bill_match = re.search(
+            r"\b(BILL\d+)\b",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if bill_match:
+            parameters.current_bill_id = bill_match.group(1).upper()
+        return LLMIntentResponse(
+            intent=Intent.LIST_BILL_ITEMS,
+            parameters=parameters,
+        )
+
+    if any(
+        phrase in text
+        for phrase in (
+            "all ticket updates",
+            "ticket update history",
+            "list ticket updates",
+            "support ticket updates",
+        )
+    ) and "latest update" not in text:
+        ticket_match = re.search(
+            r"\b(TKT\d+)\b",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if ticket_match:
+            parameters.ticket_id = ticket_match.group(1).upper()
+        return LLMIntentResponse(
+            intent=Intent.LIST_TICKET_UPDATES,
+            parameters=parameters,
+        )
+
+    return None
+
+
 def classify_deterministic_request(
     user_message: str,
 ) -> LLMIntentResponse | None:
@@ -1326,6 +1695,13 @@ def classify_deterministic_request(
 
     if subscription_inventory is not None:
         return subscription_inventory
+
+    explorer_records = _classify_explorer_records(
+        text
+    )
+
+    if explorer_records is not None:
+        return explorer_records
 
     # Phase 4 outage limitation.
     if any(

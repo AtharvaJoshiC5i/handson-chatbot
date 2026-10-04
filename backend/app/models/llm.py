@@ -14,6 +14,7 @@ from app.models.domain import (
     BillSortOrder,
     BillStatus,
     PlanType,
+    SubscriptionStatus,
     DeviceExtremeType,
     DeviceSortOrder,
     DeviceStatus,
@@ -98,8 +99,16 @@ class IntentParameters(BaseModel):
     limit: int | None = Field(
         default=None,
         ge=1,
-        le=20,
+        le=50,
     )
+
+    subscription_id: (
+        str | None
+    ) = None
+
+    subscription_status: (
+        SubscriptionStatus | None
+    ) = None
 
     # Phase 1 — usage.
     usage_type: (

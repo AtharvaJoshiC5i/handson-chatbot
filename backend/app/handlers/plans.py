@@ -22,6 +22,8 @@ from app.truth.sources import source_for_table
 def get_current_plan(
     db: sqlite3.Connection,
     customer: CustomerContext,
+    *,
+    plan_type: str | None = None,
 ) -> TruthResult[dict]:
     """Return the customer's currently active plan."""
 
@@ -29,6 +31,7 @@ def get_current_plan(
         subscription = get_current_subscription(
             db,
             customer_id=customer.customer_id,
+            plan_type=plan_type,
         )
     except sqlite3.Error:
         return database_error_result(
@@ -61,6 +64,7 @@ def get_current_plan(
         )
 
     data = {
+        "result_type": "CURRENT_PLAN",
         "subscription_id": subscription["subscription_id"],
         "plan_id": plan["plan_id"],
         "plan_name": plan["name"],
@@ -88,6 +92,8 @@ def get_current_plan(
 def get_plan_renewal(
     db: sqlite3.Connection,
     customer: CustomerContext,
+    *,
+    plan_type: str | None = None,
 ) -> TruthResult[dict]:
     """Return the authenticated customer's next plan renewal."""
 
@@ -95,6 +101,7 @@ def get_plan_renewal(
         subscription = get_current_subscription(
             db,
             customer_id=customer.customer_id,
+            plan_type=plan_type,
         )
     except sqlite3.Error:
         return database_error_result(

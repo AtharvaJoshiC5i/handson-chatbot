@@ -1559,6 +1559,71 @@ def _format_plan_comparison(data: dict) -> str:
     )
 
 
+def _format_plan_details(data: dict) -> str:
+    plan = data["plan"]
+    data_label = (
+        "unlimited data"
+        if plan["is_data_unlimited"]
+        else f"{plan['data_limit_gb']} GB data"
+    )
+    return (
+        f"{plan['plan_name']} ({plan['plan_id']}): "
+        f"₹{plan['monthly_price']}/month, {data_label}, "
+        f"{plan['voice_limit_minutes']} voice minutes, "
+        f"{plan['sms_limit']} SMS."
+    )
+
+
+def _format_account_status(data: dict) -> str:
+    address = data.get("service_address_line", "")
+    city = data.get("city", "")
+    location = ", ".join(
+        part for part in (address, city) if part
+    )
+    return (
+        f"Account {data.get('customer_id')} is "
+        f"{_label(data.get('account_status', '')).lower()}. "
+        f"Contact: {data.get('email')}, {data.get('phone')}. "
+        f"{f'Service address: {location}.' if location else ''} "
+        f"Registered {data.get('registration_date', 'on file')}."
+    ).strip()
+
+
+def _format_current_plan(data: dict) -> str:
+    if data.get("is_data_unlimited"):
+        allowance = "unlimited data"
+    else:
+        allowance = f"{_number(data.get('data_limit_gb'))} GB of data"
+    return (
+        f"You're on {data['plan_name']} ({data['plan_type']}) at "
+        f"{_money(data['monthly_price'])} per month with {allowance}. "
+        f"Subscription {data.get('subscription_status', '').lower()} — "
+        f"renews {data.get('renewal_date')}."
+    )
+
+
+def _format_usage_record_list(data: dict) -> str:
+    return (
+        f"I found {data['count']} daily usage "
+        f"{'record' if data['count'] == 1 else 'records'} "
+        "in the available data."
+    )
+
+
+def _format_bill_item_list(data: dict) -> str:
+    return (
+        f"I found {data['count']} bill line "
+        f"{'item' if data['count'] == 1 else 'items'}."
+    )
+
+
+def _format_ticket_update_list(data: dict) -> str:
+    return (
+        f"I found {data['count']} support ticket "
+        f"{'update' if data['count'] == 1 else 'updates'}."
+    )
+
+
 def _format_bill_charge_summary(data: dict) -> str:
     scope = (
         f" across your last {data['month_count']} bills"
@@ -1630,6 +1695,12 @@ FORMATTERS = {
     "PLAN_RENEWAL": _format_plan_renewal,
     "PLAN_CATALOG": _format_plan_catalog,
     "PLAN_COMPARISON": _format_plan_comparison,
+    "PLAN_DETAILS": _format_plan_details,
+    "ACCOUNT_STATUS": _format_account_status,
+    "CURRENT_PLAN": _format_current_plan,
+    "USAGE_RECORD_LIST": _format_usage_record_list,
+    "BILL_ITEM_LIST": _format_bill_item_list,
+    "TICKET_UPDATE_LIST": _format_ticket_update_list,
     "BILL_CHARGE_SUMMARY": _format_bill_charge_summary,
     "PROJECTED_BILL": _format_projected_bill,
     "PAYMENT_PROFILE": _format_payment_profile,

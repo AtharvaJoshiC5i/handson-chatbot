@@ -40,11 +40,16 @@ def _plan_dict(row) -> dict:
 def get_list_subscriptions(
     db: sqlite3.Connection,
     customer: CustomerContext,
+    *,
+    plan_type: str | None = None,
+    subscription_status: str | None = None,
 ) -> TruthResult[dict]:
     try:
         rows = list_subscriptions_for_customer(
             db,
             customer.customer_id,
+            plan_type=plan_type,
+            status=subscription_status,
         )
     except sqlite3.Error:
         return database_error_result(
@@ -82,6 +87,36 @@ def get_list_subscriptions(
             "subscriptions": subscriptions,
         },
         source=source_for_table("subscriptions"),
+    )
+
+
+def get_plan_details(
+    db: sqlite3.Connection,
+    customer: CustomerContext,
+    *,
+    plan_id: str,
+) -> TruthResult[dict]:
+    del customer
+
+    try:
+        row = get_plan_by_id(db, plan_id=plan_id)
+    except sqlite3.Error:
+        return database_error_result(
+            message="Unable to retrieve that plan.",
+        )
+
+    if row is None:
+        return not_found_result(
+            source=source_for_table("plans"),
+            message="That plan ID was not found in the catalog.",
+        )
+
+    return verified_result(
+        {
+            "result_type": "PLAN_DETAILS",
+            "plan": _plan_dict(row),
+        },
+        source=source_for_table("plans"),
     )
 
 

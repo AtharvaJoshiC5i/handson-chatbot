@@ -9,7 +9,7 @@ from app.utils.errors import ValidationError
 
 
 DEFAULT_LIMIT = 10
-MAX_LIMIT = 20
+MAX_LIMIT = 50
 
 
 def validate_limit(limit: int | None) -> int:

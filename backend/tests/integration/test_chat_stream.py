@@ -67,7 +67,6 @@ def test_chat_stream_sends_metadata_then_generated_text_deltas(
         assert [event.splitlines()[0] for event in events] == [
             "event: metadata",
             "event: delta",
-            "event: delta",
             "event: done",
         ]
 
@@ -78,8 +77,9 @@ def test_chat_stream_sends_metadata_then_generated_text_deltas(
         )
         metadata = json.loads(metadata_data)
         assert metadata["status"] == "VERIFIED"
-        assert metadata["message"] == ""
-        assert fake_client.backend_output == "Your account status is active."
+        assert metadata["presentation"] is not None
+        assert metadata["presentation"]["type"] == "key_value"
+        assert fake_client.backend_output is None
 
         deltas = [
             json.loads(
@@ -92,7 +92,9 @@ def test_chat_stream_sends_metadata_then_generated_text_deltas(
             for event in events
             if event.startswith("event: delta")
         ]
-        assert "".join(deltas) == "Your account is active."
+        narrative = "".join(deltas)
+        assert "CUST001" in narrative
+        assert "active" in narrative.lower()
     finally:
         app.dependency_overrides.clear()
         app.dependency_overrides.update(original_overrides)

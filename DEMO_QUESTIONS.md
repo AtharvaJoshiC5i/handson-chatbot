@@ -25,6 +25,8 @@ Use this file when **presenting** the app. For full capability notes, period rul
 | 8 | **CUST002** | Attention + drama | Switch customer; use welcome **attention chips** or ask: `Is anything on my account in need of attention?` |
 | 9 | **CUST002** | Failed payment + SR link | `Did my last payment fail? Why did it fail?` then `Latest update on ticket TKT003` |
 | 10 | Any | Guardrails | `Cancel my plan` or `Pay my bill now` → unsupported / read-only |
+| 11 | **CUST005** | Explorer parity | `Show my daily usage records for the last 10 days` then `List bill line items on my bills` |
+| 12 | **CUST002** | Ticket updates | `List all support ticket updates` (compare with timeline for **TKT003** only) |
 
 ---
 
@@ -58,6 +60,18 @@ Inspect raw rows anytime via **Database explorer**.
 - What mobile plans are available?
 - What fiber plans do you offer?
 - Compare PLAN001 and PLAN003.
+- Show details for plan PLAN001.
+
+**Credits & payment profile — CUST002**
+
+- Do I have any account credits?
+- Is autopay enabled? What payment method is on file?
+
+**Explorer row lists — any customer**
+
+- Show my daily usage records.
+- List bill line items on my bills.
+- List all support ticket updates.
 
 **CUST003 — converged account**
 

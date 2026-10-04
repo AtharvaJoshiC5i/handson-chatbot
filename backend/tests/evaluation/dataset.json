@@ -190,7 +190,7 @@
   {
     "id": "E022",
     "category": "usage",
-    "customer_id": "CUST003",
+    "customer_id": "CUST001",
     "question": "How many minutes have I used this year?",
     "expected_intent": "GET_VOICE_USAGE",
     "expected_parameters": {
@@ -532,7 +532,8 @@
     "customer_id": "CUST001",
     "question": "usage",
     "expected_intent": "UNSUPPORTED",
-    "expected_parameters": {}
+    "expected_parameters": {},
+    "expected_status": "AMBIGUOUS"
   },
   {
     "id": "E063",
@@ -586,6 +587,69 @@
     "expected_intent": "GET_VOICE_USAGE",
     "expected_parameters": {
       "time_range": "LAST_MONTH"
+    }
+  },
+
+  {
+    "id": "E069",
+    "category": "explorer_parity",
+    "customer_id": "CUST005",
+    "question": "Show my daily usage records for the last 10 days.",
+    "expected_intent": "LIST_USAGE_RECORDS",
+    "expected_parameters": {
+      "limit": 10
+    }
+  },
+  {
+    "id": "E070",
+    "category": "explorer_parity",
+    "customer_id": "CUST005",
+    "question": "List bill line items on my bills.",
+    "expected_intent": "LIST_BILL_ITEMS",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E071",
+    "category": "explorer_parity",
+    "customer_id": "CUST002",
+    "question": "List all support ticket updates.",
+    "expected_intent": "LIST_TICKET_UPDATES",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E072",
+    "category": "explorer_parity",
+    "customer_id": "CUST001",
+    "question": "Show details for plan PLAN001.",
+    "expected_intent": "GET_PLAN_DETAILS",
+    "expected_parameters": {
+      "plan_id": "PLAN001"
+    }
+  },
+  {
+    "id": "E073",
+    "category": "explorer_parity",
+    "customer_id": "CUST002",
+    "question": "Do I have any account credits?",
+    "expected_intent": "GET_ACCOUNT_CREDITS",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E074",
+    "category": "explorer_parity",
+    "customer_id": "CUST002",
+    "question": "Is autopay enabled on my account?",
+    "expected_intent": "GET_PAYMENT_PROFILE",
+    "expected_parameters": {}
+  },
+  {
+    "id": "E075",
+    "category": "explorer_parity",
+    "customer_id": "CUST003",
+    "question": "What is my mobile plan?",
+    "expected_intent": "GET_CURRENT_PLAN",
+    "expected_parameters": {
+      "plan_type": "MOBILE"
     }
   }
 ]

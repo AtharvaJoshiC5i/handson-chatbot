@@ -77,6 +77,71 @@ def test_intent_extraction_clarifies_after_repeated_invalid_output() -> None:
     assert len(completions.requests) == 2
 
 
+def test_usage_graph_clarification_preserves_month_window() -> None:
+    result = classify_deterministic_request(
+        "show me my usage accross a graph for the last 4 months",
+    )
+
+    assert result is not None
+    assert result.intent == Intent.UNSUPPORTED
+    assert result.clarification is not None
+    assert "4 months" in result.clarification
+    assert len(result.options) == 3
+    assert result.options[0].message == (
+        "Show my data usage for the last 4 months."
+    )
+    assert result.options[1].message == (
+        "Show my voice usage for the last 4 months."
+    )
+    assert result.options[2].message == (
+        "Show my SMS usage for the last 4 months."
+    )
+
+
+def test_usage_graph_with_data_type_routes_to_history() -> None:
+    result = classify_deterministic_request(
+        "Show my data usage on a chart for the last 4 months",
+    )
+
+    assert result is not None
+    assert result.intent == Intent.GET_USAGE_HISTORY
+    assert result.parameters.usage_type.value == "DATA"
+    assert result.parameters.month_count == 4
+
+
+def test_explorer_parity_phrases_classify_deterministically() -> None:
+    cases = [
+        (
+            "Show my daily usage records",
+            Intent.LIST_USAGE_RECORDS,
+        ),
+        (
+            "List bill line items on my bills",
+            Intent.LIST_BILL_ITEMS,
+        ),
+        (
+            "List all support ticket updates",
+            Intent.LIST_TICKET_UPDATES,
+        ),
+        (
+            "Show details for plan PLAN002",
+            Intent.GET_PLAN_DETAILS,
+        ),
+        (
+            "Do I have any account credits?",
+            Intent.GET_ACCOUNT_CREDITS,
+        ),
+        (
+            "Is autopay enabled?",
+            Intent.GET_PAYMENT_PROFILE,
+        ),
+    ]
+    for question, expected_intent in cases:
+        result = classify_deterministic_request(question)
+        assert result is not None
+        assert result.intent == expected_intent
+
+
 def test_named_month_usage_questions_are_classified_without_llm() -> None:
     examples = [
         ("Give me my data usage for September", 9, None),

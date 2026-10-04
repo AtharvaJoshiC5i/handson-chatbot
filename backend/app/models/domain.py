@@ -119,6 +119,12 @@ class Intent(str, Enum):
     GET_LIST_SUBSCRIPTIONS = "GET_LIST_SUBSCRIPTIONS"
     GET_PLAN_CATALOG = "GET_PLAN_CATALOG"
     GET_PLAN_COMPARISON = "GET_PLAN_COMPARISON"
+    GET_PLAN_DETAILS = "GET_PLAN_DETAILS"
+
+    # Explorer parity — granular records
+    LIST_USAGE_RECORDS = "LIST_USAGE_RECORDS"
+    LIST_BILL_ITEMS = "LIST_BILL_ITEMS"
+    LIST_TICKET_UPDATES = "LIST_TICKET_UPDATES"
 
     # Phase 1 — usage
     GET_DATA_USAGE = "GET_DATA_USAGE"
@@ -218,6 +224,13 @@ class UsageType(str, Enum):
 class PlanType(str, Enum):
     MOBILE = "MOBILE"
     FIBER = "FIBER"
+
+
+class SubscriptionStatus(str, Enum):
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+    CANCELLED = "CANCELLED"
+    SUSPENDED = "SUSPENDED"
 
 
 class UsagePercentageType(str, Enum):

@@ -54,6 +54,7 @@ INTENT_DEFINITIONS = (
     _definition(
         Intent.GET_CURRENT_PLAN,
         "get_current_plan",
+        optional=PLAN_TYPE,
     ),
     _definition(
         Intent.GET_ACCOUNT_STATUS,
@@ -62,11 +63,16 @@ INTENT_DEFINITIONS = (
     _definition(
         Intent.GET_PLAN_RENEWAL,
         "get_plan_renewal",
+        optional=PLAN_TYPE,
     ),
 
     _definition(
         Intent.GET_LIST_SUBSCRIPTIONS,
         "get_list_subscriptions",
+        optional=(
+            *PLAN_TYPE,
+            "subscription_status",
+        ),
     ),
     _definition(
         Intent.GET_PLAN_CATALOG,
@@ -79,6 +85,37 @@ INTENT_DEFINITIONS = (
         required=(
             "plan_id",
             "comparison_plan_id",
+        ),
+    ),
+    _definition(
+        Intent.GET_PLAN_DETAILS,
+        "get_plan_details",
+        required=("plan_id",),
+    ),
+
+    _definition(
+        Intent.LIST_USAGE_RECORDS,
+        "list_usage_records_for_customer",
+        optional=(
+            "subscription_id",
+            "limit",
+        ),
+    ),
+    _definition(
+        Intent.LIST_BILL_ITEMS,
+        "list_bill_items",
+        optional=(
+            "current_bill_id",
+            "bill_item_type",
+            "limit",
+        ),
+    ),
+    _definition(
+        Intent.LIST_TICKET_UPDATES,
+        "list_ticket_updates",
+        optional=(
+            "ticket_id",
+            "limit",
         ),
     ),
 

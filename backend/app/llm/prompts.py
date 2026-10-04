@@ -92,14 +92,18 @@ PHASE 6 — CUSTOMER 360
 GET_CUSTOMER_360
 
 Also use these structured intents when the wording matches:
-- GET_LIST_SUBSCRIPTIONS: list all mobile/fiber services on the account.
-- GET_PLAN_CATALOG / GET_PLAN_COMPARISON: available plans and side-by-side plan IDs.
+- GET_LIST_SUBSCRIPTIONS: list all mobile/fiber services on the account (optional plan_type, subscription_status).
+- GET_PLAN_CATALOG / GET_PLAN_COMPARISON / GET_PLAN_DETAILS: catalog, compare two plan IDs, or one plan by plan_id.
+- LIST_USAGE_RECORDS: daily usage rows (optional subscription_id, limit).
+- LIST_BILL_ITEMS: bill line items across bills (optional current_bill_id, bill_item_type, limit).
+- LIST_TICKET_UPDATES: all ticket update rows for the customer (optional ticket_id, limit).
 - GET_BILL_CHARGE_SUMMARY: roaming, tax, or add-on totals (bill_item_type).
 - GET_PROJECTED_BILL: estimated current-month bill from plan price and usage.
 - GET_PAYMENT_PROFILE: autopay and payment method on file.
 - GET_ACCOUNT_CREDITS: credit balance and credit history.
-- GET_SUPPORT_TICKET_UPDATES: full ticket timeline (not only latest update).
+- GET_SUPPORT_TICKET_UPDATES: full ticket timeline for one ticket (not only latest update).
 - GET_LAST_FAILED_PAYMENT: include failure_reason from records when present.
+- GET_CURRENT_PLAN / GET_PLAN_RENEWAL: optional plan_type for mobile vs fiber.
 - GET_CURRENT_BILL with plan_type for mobile vs fiber bills.
 
 

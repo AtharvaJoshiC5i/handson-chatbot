@@ -54,10 +54,16 @@ from app.handlers.plans import (
     get_current_plan,
     get_plan_renewal,
 )
+from app.handlers.explorer_parity import (
+    list_bill_items,
+    list_ticket_updates,
+    list_usage_records_for_customer,
+)
 from app.handlers.subscriptions_catalog import (
     get_list_subscriptions,
     get_plan_catalog,
     get_plan_comparison,
+    get_plan_details,
 )
 from app.handlers.billing_extras import (
     get_bill_charge_summary,
@@ -118,6 +124,12 @@ HANDLERS = {
     "get_list_subscriptions": get_list_subscriptions,
     "get_plan_catalog": get_plan_catalog,
     "get_plan_comparison": get_plan_comparison,
+    "get_plan_details": get_plan_details,
+    "list_usage_records_for_customer": (
+        list_usage_records_for_customer
+    ),
+    "list_bill_items": list_bill_items,
+    "list_ticket_updates": list_ticket_updates,
 
     # Phase 1
     "get_data_usage": get_data_usage,

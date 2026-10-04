@@ -8,7 +8,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
 
-from app.database.connection import create_connection
+import sqlite3
+
+from app.database.seed import seed_database
 from app.models.domain import (
     CustomerContext,
     Intent,
@@ -180,27 +182,20 @@ def _normalize_parameters(
 ) -> dict[str, Any]:
     """Convert structured parameters into comparable JSON data."""
 
-    result: dict[str, Any] = {}
+    return parameters.model_dump(
+        mode="json",
+        exclude_none=True,
+    )
 
-    if parameters.time_range is not None:
-        result["time_range"] = (
-            parameters.time_range.value
-        )
 
-    if parameters.limit is not None:
-        result["limit"] = parameters.limit
+def _create_evaluation_db() -> sqlite3.Connection:
+    """Fresh in-memory database with demo seed for reproducible eval."""
 
-    if parameters.current_bill_id is not None:
-        result["current_bill_id"] = (
-            parameters.current_bill_id
-        )
-
-    if parameters.previous_bill_id is not None:
-        result["previous_bill_id"] = (
-            parameters.previous_bill_id
-        )
-
-    return result
+    connection = sqlite3.connect(":memory:")
+    connection.row_factory = sqlite3.Row
+    connection.execute("PRAGMA foreign_keys = ON")
+    seed_database(connection, reset=True)
+    return connection
 
 
 def _parameters_match(
@@ -247,7 +242,7 @@ def _run_single_case(
         "response": None,
     }
 
-    db = create_connection()
+    db = _create_evaluation_db()
 
     try:
         provider = provider_factory(case)
@@ -302,12 +297,12 @@ def _run_single_case(
         result["response"] = response.message
         result["actual_status"] = response.status
 
-        expected_status = (
-            TruthStatus.UNSUPPORTED.value
-            if case["expected_intent"]
-            == Intent.UNSUPPORTED.value
-            else TruthStatus.VERIFIED.value
-        )
+        if case.get("expected_status"):
+            expected_status = case["expected_status"]
+        elif case["expected_intent"] == Intent.UNSUPPORTED.value:
+            expected_status = TruthStatus.UNSUPPORTED.value
+        else:
+            expected_status = TruthStatus.VERIFIED.value
 
         result["expected_status"] = (
             expected_status
