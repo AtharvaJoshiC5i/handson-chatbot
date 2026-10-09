@@ -100,14 +100,7 @@ export function WelcomePanel({
                   </div>
                 </div>
 
-                {snapshot.projected_bill && (
-                  <p className="welcome-snapshot-foot">
-                    Est. this month:{" "}
-                    <strong>
-                      {formatInr(snapshot.projected_bill.estimated_amount)}
-                    </strong>
-                  </p>
-                )}
+                
               </div>
 
               {!loading && attentionItems.length > 0 && (
