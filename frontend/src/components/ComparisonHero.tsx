@@ -31,21 +31,45 @@ export function ComparisonHero({
     return null;
   }
 
-  const [leftKey, rightKey] = presentation.columns.map(
-    (column) => column.key,
-  );
-  const leftValue = amountRow.values[leftKey];
-  const rightValue = amountRow.values[rightKey];
-  const leftAmount = leftValue ? parseInr(leftValue) : null;
-  const rightAmount = rightValue ? parseInr(rightValue) : null;
+  const keys = presentation.columns.map((column) => column.key);
+  const previousKey = keys.includes("previous")
+    ? "previous"
+    : keys[0];
+  const currentKey = keys.includes("current")
+    ? "current"
+    : keys[1] ?? keys[0];
 
-  if (leftAmount === null || rightAmount === null || leftAmount === 0) {
+  const previousValue = amountRow.values[previousKey];
+  const currentValue = amountRow.values[currentKey];
+  const previousAmount = previousValue
+    ? parseInr(previousValue)
+    : null;
+  const currentAmount = currentValue
+    ? parseInr(currentValue)
+    : null;
+
+  if (
+    previousAmount === null
+    || currentAmount === null
+    || previousAmount === 0
+  ) {
     return null;
   }
 
-  const delta = rightAmount - leftAmount;
-  const pct = Math.round((delta / leftAmount) * 100);
-  const direction = delta >= 0 ? "↑" : "↓";
+  const delta = currentAmount - previousAmount;
+  const pctRaw = (delta / previousAmount) * 100;
+  const pctRounded = Math.round(pctRaw);
+  const pctLabel =
+    delta !== 0 && pctRounded === 0
+      ? pctRaw.toFixed(1)
+      : String(Math.abs(pctRounded));
+  const direction = delta > 0 ? "↑" : delta < 0 ? "↓" : "→";
+  const trendClass =
+    delta > 0
+      ? "text-[#9b3d35]"
+      : delta < 0
+        ? "text-[#3d8b66]"
+        : "text-[#7d8b81]";
 
   return (
     <div className="mb-3 rounded-lg border border-[#dfe7e0] bg-[#f8faf8] px-4 py-3">
@@ -53,17 +77,12 @@ export function ComparisonHero({
         {amountRow.label}
       </p>
       <p className="mt-1 text-[18px] font-semibold tabular-nums text-[#1c342b]">
-        {leftValue}
+        {previousValue}
         <span className="mx-2 text-[#96a198]">→</span>
-        {rightValue}
-        <span
-          className={[
-            "ml-2 text-[13px]",
-            delta >= 0 ? "text-[#9b3d35]" : "text-[#3d8b66]",
-          ].join(" ")}
-        >
+        {currentValue}
+        <span className={["ml-2 text-[13px]", trendClass].join(" ")}>
           ({direction}
-          {Math.abs(pct)}%)
+          {delta === 0 ? "0" : pctLabel}%)
         </span>
       </p>
     </div>

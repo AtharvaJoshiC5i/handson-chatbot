@@ -98,6 +98,25 @@ export interface SummaryPresentation {
   sections: SummarySection[];
 }
 
+export interface PlanRecommendationPlan {
+  plan_name: string;
+  monthly_price?: number | null;
+  data_limit_gb?: number | null;
+}
+
+export interface PlanRecommendationPresentation {
+  type: "plan_recommendation";
+  title?: string | null;
+  recommendation_status: string;
+  current: PlanRecommendationPlan;
+  recommended?: PlanRecommendationPlan | null;
+  average_monthly_data_gb?: number | null;
+  months_sampled?: number | null;
+  utilization_percent?: number | null;
+  estimated_monthly_savings?: number | null;
+  reasons: string[];
+}
+
 export interface Customer360Table {
   title: string;
   columns: TableColumn[];
@@ -118,6 +137,7 @@ export type ChatPresentation =
   | TablePresentation
   | TimeSeriesPresentation
   | SummaryPresentation
+  | PlanRecommendationPresentation
   | Customer360Presentation;
 
 /* ============================================================

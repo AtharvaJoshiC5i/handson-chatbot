@@ -1,4 +1,4 @@
-import { Database, LayoutDashboard, MessagesSquare } from "lucide-react";
+import { Database, MessagesSquare } from "lucide-react";
 
 import { cn } from "../../lib/cn";
 
@@ -15,8 +15,7 @@ const TABS: {
   icon: typeof MessagesSquare;
 }[] = [
   { page: "support", label: "Support", icon: MessagesSquare },
-  { page: "account", label: "Account", icon: LayoutDashboard },
-  { page: "database", label: "Database", icon: Database },
+  { page: "database", label: "Data", icon: Database },
 ];
 
 export function MobileTabBar({ appPage, onPageChange }: MobileTabBarProps) {

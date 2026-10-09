@@ -38,6 +38,10 @@ function shouldShowNarrativeLead(
     return true;
   }
 
+  if (message.presentation?.type === "customer_360") {
+    return false;
+  }
+
   return false;
 }
 
@@ -283,7 +287,7 @@ export function MessageBubble({
     <div className="group w-full min-w-0">
       {showNarrativeLead ? (
         <AssistantMarkdown content={message.content} />
-      ) : message.isStreaming ? (
+      ) : message.presentation?.type === "customer_360" ? null : message.isStreaming ? (
         <div className="flex h-7 items-center gap-1.5" role="status" aria-label="Response is being generated">
           <span className="size-1.5 animate-pulse rounded-full bg-[#8da391]" />
           <span className="size-1.5 animate-pulse rounded-full bg-[#8da391] [animation-delay:120ms]" />
@@ -299,7 +303,13 @@ export function MessageBubble({
       )}
 
       {message.presentation && (
-        <div className="mt-4 min-w-0">
+        <div
+          className={
+            message.presentation.type === "customer_360"
+              ? "c360-message-shell mt-3 min-w-0"
+              : "mt-4 min-w-0"
+          }
+        >
           <StructuredPresentation
             presentation={message.presentation}
             onEntitySelect={onOptionSelect}

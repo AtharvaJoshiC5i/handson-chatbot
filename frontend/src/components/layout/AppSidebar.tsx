@@ -1,6 +1,5 @@
 import {
   Database,
-  LayoutDashboard,
   MessagesSquare,
   Plus,
   Signal,
@@ -10,7 +9,7 @@ import {
 import { Button } from "../ui/Button";
 import { NavItem } from "../ui/NavItem";
 
-export type AppPage = "support" | "account" | "database";
+export type AppPage = "support" | "database";
 
 interface AppSidebarProps {
   appPage: AppPage;
@@ -76,13 +75,6 @@ export function AppSidebar({
         >
           <MessagesSquare size={15} strokeWidth={1.8} aria-hidden="true" />
           Support
-        </NavItem>
-        <NavItem
-          active={appPage === "account"}
-          onClick={() => onPageChange("account")}
-        >
-          <LayoutDashboard size={15} strokeWidth={1.8} aria-hidden="true" />
-          Account
         </NavItem>
         <NavItem
           active={appPage === "database"}

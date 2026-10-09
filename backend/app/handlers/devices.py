@@ -53,13 +53,29 @@ def _device_dict(
 def get_device_information(
     db: sqlite3.Connection,
     customer: CustomerContext,
+    *,
+    device_type: DeviceType | None = None,
+    device_status: DeviceStatus | None = None,
 ) -> TruthResult[dict]:
-    """Return all devices associated with the customer."""
+    """Return devices associated with the customer."""
+
+    statuses = (
+        (device_status.value,)
+        if device_status is not None
+        else None
+    )
+    types = (
+        (device_type.value,)
+        if device_type is not None
+        else None
+    )
 
     try:
         devices = get_devices(
             db,
             customer.customer_id,
+            statuses=statuses,
+            device_types=types,
         )
     except sqlite3.Error:
         return database_error_result(
@@ -69,6 +85,21 @@ def get_device_information(
         )
 
     if not devices:
+        if device_type is not None:
+            label = device_type.value.replace(
+                "_",
+                " ",
+            ).lower()
+            return not_found_result(
+                source=source_for_table(
+                    "devices"
+                ),
+                message=(
+                    f"I don't have a {label} registered "
+                    "on your account in the available records."
+                ),
+            )
+
         return not_found_result(
             source=source_for_table(
                 "devices"

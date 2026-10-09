@@ -303,6 +303,33 @@ class SummaryPresentation(BaseModel):
     sections: list[SummarySection]
 
 
+class PlanRecommendationPlan(BaseModel):
+    """Plan snapshot for recommendation UI."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    plan_name: str
+    monthly_price: float | None = None
+    data_limit_gb: float | None = None
+
+
+class PlanRecommendationPresentation(BaseModel):
+    """Personalized plan fit with usage context and reasons."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["plan_recommendation"] = "plan_recommendation"
+    title: str | None = None
+    recommendation_status: str
+    current: PlanRecommendationPlan
+    recommended: PlanRecommendationPlan | None = None
+    average_monthly_data_gb: float | None = None
+    months_sampled: int | None = None
+    utilization_percent: float | None = None
+    estimated_monthly_savings: float | None = None
+    reasons: list[str] = Field(default_factory=list)
+
+
 class Customer360Table(BaseModel):
     """All records for one customer-owned domain table."""
 
@@ -331,6 +358,7 @@ ChatPresentation = (
     | TablePresentation
     | TimeSeriesPresentation
     | SummaryPresentation
+    | PlanRecommendationPresentation
     | Customer360Presentation
 )
 

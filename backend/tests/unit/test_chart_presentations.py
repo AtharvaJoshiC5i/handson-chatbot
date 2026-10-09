@@ -142,6 +142,7 @@ def test_payment_history_splits_date_and_time_columns() -> None:
 
     assert isinstance(presentation, TablePresentation)
     assert [col.key for col in presentation.columns] == [
+        "bill_period",
         "date",
         "time",
         "amount",

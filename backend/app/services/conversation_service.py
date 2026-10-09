@@ -2,18 +2,22 @@
 
 from __future__ import annotations
 
-from collections import OrderedDict
-from dataclasses import dataclass
+from collections import OrderedDict, deque
+from dataclasses import dataclass, field
 from datetime import date
 import re
 from threading import RLock
 from typing import Any
 
+from app.config.settings import get_settings
 from app.llm.client import classify_deterministic_request
+from app.services.conversation_turn import ConversationTurn
+from app.services.conversation_turn_summary import (
+    summarize_turn_facts,
+    truncate_user_message,
+)
 from app.models.domain import (
     CustomerContext,
-    DeviceExtremeType,
-    DeviceStatus,
     Intent,
     PaymentStatus,
     SupportTicketPriority,
@@ -51,6 +55,17 @@ _MONTHS = {
     )
     if month
 }
+
+_BILL_ID_PATTERN = re.compile(
+    r"\bBILL\d+\b",
+    re.IGNORECASE,
+)
+
+
+def _turn_deque() -> deque[ConversationTurn]:
+    return deque(
+        maxlen=get_settings().conversation_turn_window,
+    )
 
 
 def _month_and_year(
@@ -149,6 +164,9 @@ class ConversationContext:
     usage_type: str | None = None
     support_unresolved_only: bool = False
     support_ticket_status: str | None = None
+    turns: deque[ConversationTurn] = field(
+        default_factory=_turn_deque,
+    )
 
     def compact_hint(self) -> str:
         """Return bounded structured state, never a message transcript."""
@@ -174,6 +192,103 @@ class ConversationContext:
             if getattr(self, name) is not None
             and getattr(self, name) is not False
         )
+
+    def build_intent_context(self) -> str:
+        """Snapshot plus bounded recent turn summaries for intent LLM."""
+
+        parts: list[str] = []
+        snapshot = self.compact_hint()
+        if snapshot:
+            parts.append(f"Snapshot: {snapshot}")
+        if self.turns:
+            lines = [
+                turn.format_line(index)
+                for index, turn in enumerate(
+                    self.turns,
+                    start=1,
+                )
+            ]
+            parts.append(
+                "Recent turns (oldest→newest):\n"
+                + "\n".join(lines)
+            )
+        return "\n".join(parts)
+
+    def record_turn(
+        self,
+        user_message: str,
+        intent_response: LLMIntentResponse,
+        result: TruthResult[Any],
+    ) -> None:
+        data = result.data
+        result_type: str | None = None
+        if isinstance(data, dict):
+            raw_type = data.get("result_type")
+            if isinstance(raw_type, str):
+                result_type = raw_type
+
+        self.turns.append(
+            ConversationTurn(
+                user_message=truncate_user_message(
+                    user_message,
+                ),
+                intent=intent_response.intent.value,
+                status=result.status.value,
+                result_type=result_type,
+                domain=self.active_domain,
+                facts=summarize_turn_facts(result),
+            )
+        )
+
+    def recent_turns(
+        self,
+        limit: int = 3,
+    ) -> list[ConversationTurn]:
+        if limit <= 0:
+            return []
+        return list(self.turns)[-limit:]
+
+    def referenced_period_from_history(
+        self,
+        limit: int = 3,
+    ) -> str | None:
+        for turn in reversed(
+            self.recent_turns(limit)
+        ):
+            period = _period_key(turn.facts)
+            if period is not None:
+                return period
+        return None
+
+    def referenced_bill_id_from_history(
+        self,
+        limit: int = 3,
+    ) -> str | None:
+        for turn in reversed(
+            self.recent_turns(limit)
+        ):
+            match = _BILL_ID_PATTERN.search(
+                turn.facts,
+            )
+            if match is not None:
+                return match.group(0).upper()
+        return None
+
+    def referenced_ticket_id_from_history(
+        self,
+        limit: int = 3,
+    ) -> str | None:
+        for turn in reversed(
+            self.recent_turns(limit)
+        ):
+            match = re.search(
+                r"\bTKT\d+\b",
+                turn.facts,
+                re.IGNORECASE,
+            )
+            if match is not None:
+                return match.group(0).upper()
+        return None
 
     def update(
         self,
@@ -449,10 +564,9 @@ def _domain_for_intent(
     if intent in {
         Intent.GET_CURRENT_PLAN,
         Intent.GET_PLAN_RENEWAL,
-        Intent.GET_ACCOUNT_PLAN_STATUS,
     }:
         return "subscription"
-    if intent == Intent.GET_CUSTOMER_360:
+    if intent == Intent.GET_ACCOUNT_PLAN_STATUS:
         return "account_summary"
     if intent == Intent.GET_ACCOUNT_ATTENTION_SUMMARY:
         return "attention"
@@ -559,6 +673,34 @@ class ConversationService:
             "this",
         }
 
+        def _bill_id_for_followup() -> str | None:
+            if context.referenced_bill_id:
+                return context.referenced_bill_id
+            if is_reference:
+                return context.referenced_bill_id_from_history()
+            return None
+
+        def _period_for_followup() -> str | None:
+            if context.referenced_period:
+                return context.referenced_period
+            if is_reference or any(
+                phrase in text
+                for phrase in (
+                    "same period",
+                    "that month",
+                    "same month",
+                )
+            ):
+                return context.referenced_period_from_history()
+            return None
+
+        def _ticket_id_for_followup() -> str | None:
+            if context.referenced_ticket_id:
+                return context.referenced_ticket_id
+            if is_reference:
+                return context.referenced_ticket_id_from_history()
+            return None
+
         explicit_domain = self._explicit_domain(
             text
         )
@@ -622,12 +764,9 @@ class ConversationService:
                     parameters=params,
                 )
             if active == "support":
-                if context.referenced_ticket_id:
-                    params.ticket_id = context.referenced_ticket_id
-                    return LLMIntentResponse(
-                        intent=Intent.GET_SPECIFIC_SUPPORT_TICKET,
-                        parameters=params,
-                    )
+                ticket_id = _ticket_id_for_followup()
+                if ticket_id:
+                    params.ticket_id = ticket_id
                 return LLMIntentResponse(
                     intent=Intent.GET_LATEST_SUPPORT_TICKET,
                     parameters=params,
@@ -646,14 +785,30 @@ class ConversationService:
                     return resolved
             return self._status_clarification()
 
+        effective_period = _period_for_followup()
         month, year = _month_and_year(
             text,
             default_year=(
-                int(context.referenced_period[:4])
-                if context.referenced_period
+                int(effective_period[:4])
+                if effective_period
                 else date.today().year
             ),
         )
+        if (
+            month is None
+            and is_reference
+            and any(
+                phrase in text
+                for phrase in (
+                    "that month",
+                    "same month",
+                    "same period",
+                )
+            )
+            and effective_period is not None
+        ):
+            month = int(effective_period[5:7])
+            year = int(effective_period[:4])
         is_last_month = "last month" in text
         is_this_month = "this month" in text
         has_comparison = any(
@@ -711,22 +866,12 @@ class ConversationService:
             and "previous one" in text
             and context.comparison_period is not None
         ):
-            primary_month, primary_year = self._context_month(
-                context
-            )
-            params.month = primary_month
-            params.year = primary_year
-            params.comparison_month = int(
-                context.comparison_period[5:7]
-            )
-            params.comparison_year = int(
-                context.comparison_period[:4]
-            )
             params.usage_type = UsageType(
                 context.usage_type or UsageType.DATA.value
             )
+            params.month_count = 2
             return LLMIntentResponse(
-                intent=Intent.GET_USAGE_COMPARISON,
+                intent=Intent.GET_USAGE_HISTORY,
                 parameters=params,
             )
 
@@ -777,12 +922,9 @@ class ConversationService:
             )
             if is_last_month and month is None:
                 params.time_range = TimeRange.LAST_MONTH
-                return LLMIntentResponse(
-                    intent=Intent.GET_SPECIFIC_BILL,
-                    parameters=params,
-                )
+            params.limit = 1
             return LLMIntentResponse(
-                intent=Intent.GET_SPECIFIC_BILL,
+                intent=Intent.GET_BILL_HISTORY,
                 parameters=params,
             )
 
@@ -806,7 +948,7 @@ class ConversationService:
                 else:
                     return None
                 return LLMIntentResponse(
-                    intent=Intent.GET_SPECIFIC_BILL,
+                    intent=Intent.GET_BILL_COMPARISON,
                     parameters=params,
                 )
 
@@ -820,9 +962,11 @@ class ConversationService:
                     "why is it more",
                 )
             ):
-                params.current_bill_id = context.referenced_bill_id
+                bill_id = _bill_id_for_followup()
+                if bill_id:
+                    params.current_bill_id = bill_id
                 return LLMIntentResponse(
-                    intent=Intent.EXPLAIN_BILL_CHANGE,
+                    intent=Intent.GET_BILL_ANOMALY_DETECTION,
                     parameters=params,
                 )
 
@@ -836,7 +980,9 @@ class ConversationService:
                     "what are the charges",
                 )
             ):
-                params.current_bill_id = context.referenced_bill_id
+                bill_id = _bill_id_for_followup()
+                if bill_id:
+                    params.current_bill_id = bill_id
                 return LLMIntentResponse(
                     intent=Intent.GET_BILL_BREAKDOWN,
                     parameters=params,
@@ -852,13 +998,10 @@ class ConversationService:
                     "did i pay that bill",
                 )
             ):
-                if context.referenced_period:
-                    params.month = int(
-                        context.referenced_period[5:7]
-                    )
-                    params.year = int(
-                        context.referenced_period[:4]
-                    )
+                period = _period_for_followup()
+                if period:
+                    params.month = int(period[5:7])
+                    params.year = int(period[:4])
                     return LLMIntentResponse(
                         intent=Intent.RECONCILE_BILL_PAYMENT,
                         parameters=params,
@@ -877,14 +1020,6 @@ class ConversationService:
                     "did it go through",
                 )
             ):
-                if context.referenced_payment_reference:
-                    params.transaction_reference = (
-                        context.referenced_payment_reference
-                    )
-                    return LLMIntentResponse(
-                        intent=Intent.GET_PAYMENT_BY_REFERENCE,
-                        parameters=params,
-                    )
                 return LLMIntentResponse(
                     intent=Intent.GET_PAYMENT_STATUS,
                     parameters=params,
@@ -899,7 +1034,7 @@ class ConversationService:
                     "support about this",
                 )
             ):
-                if context.referenced_bill_id:
+                if _bill_id_for_followup():
                     return LLMIntentResponse(
                         intent=Intent.GET_BILLING_SUPPORT_STATUS,
                         parameters=params,
@@ -951,7 +1086,7 @@ class ConversationService:
                         )
                     )
                 return LLMIntentResponse(
-                    intent=Intent.FILTER_SUPPORT_TICKETS,
+                    intent=Intent.GET_SUPPORT_TICKETS,
                     parameters=params,
                 )
 
@@ -964,7 +1099,9 @@ class ConversationService:
                     "when was the previous one updated",
                 )
             ):
-                params.ticket_id = context.referenced_ticket_id
+                ticket_id = _ticket_id_for_followup()
+                if ticket_id:
+                    params.ticket_id = ticket_id
                 return LLMIntentResponse(
                     intent=Intent.GET_SUPPORT_LAST_UPDATED,
                     parameters=params,
@@ -979,9 +1116,8 @@ class ConversationService:
                     "which ones active",
                 )
             ):
-                params.device_status = DeviceStatus.ACTIVE
                 return LLMIntentResponse(
-                    intent=Intent.FILTER_DEVICES,
+                    intent=Intent.GET_DEVICE_INFORMATION,
                     parameters=params,
                 )
 
@@ -994,11 +1130,8 @@ class ConversationService:
                     "which is newest",
                 )
             ):
-                params.device_extreme_type = (
-                    DeviceExtremeType.NEWEST
-                )
                 return LLMIntentResponse(
-                    intent=Intent.GET_DEVICE_EXTREME,
+                    intent=Intent.GET_DEVICE_INFORMATION,
                     parameters=params,
                 )
 
@@ -1150,6 +1283,11 @@ class ConversationService:
                 "customer 360",
                 "account overview",
                 "account summary",
+                "entire account",
+                "everything about my account",
+                "full profile",
+                "all my account details",
+                "at a glance",
             )
         ):
             return "account_summary"

@@ -13,6 +13,7 @@ from app.config.attention import (
     ATTENTION_SUPPORT_PRIORITIES,
     ATTENTION_SUPPORT_STATUSES,
     HIGH_USAGE_ATTENTION_PERCENTAGE,
+    PLAN_RENEWAL_ALERT_DAYS,
 )
 from app.database.queries.credits import (
     get_available_credit_total,
@@ -392,6 +393,10 @@ def get_bill_payment_status(
                 "pending_amount": reconciliation[
                     "pending_amount"
                 ],
+                "failed_attempt_amount": reconciliation.get(
+                    "failed_attempt_amount",
+                    0.0,
+                ),
                 "outstanding_amount": (
                     reconciliation[
                         "outstanding_amount"
@@ -507,6 +512,18 @@ def get_bill_payment_explanation(
             "attempt_count": reconciliation[
                 "attempt_count"
             ],
+            "successful_attempt_count": reconciliation.get(
+                "successful_attempt_count",
+                0,
+            ),
+            "failed_attempt_count": reconciliation.get(
+                "failed_attempt_count",
+                0,
+            ),
+            "pending_attempt_count": reconciliation.get(
+                "pending_attempt_count",
+                0,
+            ),
             "successful_paid_amount": (
                 reconciliation[
                     "successful_paid_amount"
@@ -515,6 +532,10 @@ def get_bill_payment_explanation(
             "pending_amount": reconciliation[
                 "pending_amount"
             ],
+            "failed_attempt_amount": reconciliation.get(
+                "failed_attempt_amount",
+                0.0,
+            ),
             "outstanding_amount": (
                 reconciliation[
                     "outstanding_amount"
@@ -895,6 +916,41 @@ def get_account_attention_summary(
                     )
                 )
 
+            renewal_date = subscription.get(
+                "renewal_date"
+            )
+            if renewal_date:
+                from datetime import date
+
+                days_until = (
+                    date.fromisoformat(renewal_date)
+                    - date.today()
+                ).days
+                if (
+                    0
+                    <= days_until
+                    <= PLAN_RENEWAL_ALERT_DAYS
+                ):
+                    day_label = (
+                        "today"
+                        if days_until == 0
+                        else (
+                            f"in {days_until} day"
+                            f"{'s' if days_until != 1 else ''}"
+                        )
+                    )
+                    attention_items.append(
+                        _attention_item(
+                            "Plan",
+                            "medium",
+                            (
+                                f"🔔 Your plan renews "
+                                f"{day_label}."
+                            ),
+                            "When does my plan renew?",
+                        )
+                    )
+
     # --------------------------------------------------------
     # Current bill
     # --------------------------------------------------------
@@ -934,8 +990,12 @@ def get_account_attention_summary(
                         else "medium"
                     ),
                     (
-                        f"Your current bill is "
-                        f"{bill_status.lower().replace('_', ' ')}."
+                        "⚠️ Your bill is overdue."
+                        if bill_status == "OVERDUE"
+                        else (
+                            f"⚠️ Your current bill is "
+                            f"{bill_status.lower().replace('_', ' ')}."
+                        )
                     ),
                     "What is my current bill and its payment status?",
                 )
@@ -984,14 +1044,13 @@ def get_account_attention_summary(
                     == "FAILED"
                 ):
                     message = (
-                        "Your latest payment attempt "
-                        "failed."
+                        "⚠️ Your latest payment failed."
                     )
 
                 else:
                     message = (
-                        "Your latest payment attempt "
-                        "is still pending."
+                        "⚠️ Your latest payment is still "
+                        "pending."
                     )
 
                 attention_items.append(
@@ -1126,9 +1185,9 @@ def get_account_attention_summary(
                     "Usage",
                     "medium",
                     (
-                        f"You've used "
-                        f"{float(percentage):.1f}% "
-                        "of your current data allowance."
+                        f"⚠️ You have used "
+                        f"{float(percentage):.0f}% of your "
+                        "monthly data."
                     ),
                     "How much data have I used this month?",
                 )

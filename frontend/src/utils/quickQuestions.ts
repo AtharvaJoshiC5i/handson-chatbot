@@ -42,23 +42,33 @@ export const QUICK_QUESTIONS_TO_GET_STARTED: QuickQuestion[] = [
     message: "Show my support tickets",
     icon: Headphones,
   },
-];
-
-/** Extra structured analytics prompts (roaming, trend, spend). */
-export const QUICK_QUESTIONS_ANALYTICS: QuickQuestion[] = [
   {
-    label: "Roaming spend",
-    message: "How much did I spend on roaming in the last 6 months?",
-    icon: Globe,
-  },
-  {
-    label: "Bill trend",
-    message: "Show my bill trend over the last 6 months.",
+    label: "Bill spike",
+    message: "Why is my bill higher this month?",
     icon: TrendingUp,
   },
   {
-    label: "Recent spend",
-    message: "How much have I spent on my last 3 bills?",
+    label: "Right plan?",
+    message: "Am I on the right plan?",
+    icon: CreditCard,
+  },
+];
+
+/** Extra structured prompts (history and compare). */
+export const QUICK_QUESTIONS_ANALYTICS: QuickQuestion[] = [
+  {
+    label: "Compare bills",
+    message: "Compare my latest bill with the previous one",
+    icon: TrendingUp,
+  },
+  {
+    label: "Bill history",
+    message: "Show my last 5 bills",
     icon: ChartNoAxesColumnIncreasing,
+  },
+  {
+    label: "Usage history",
+    message: "Show my data usage history for the last 6 months",
+    icon: Globe,
   },
 ];

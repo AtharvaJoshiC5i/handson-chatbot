@@ -8,6 +8,7 @@ import {
   QUICK_QUESTIONS_TO_GET_STARTED,
 } from "../utils/quickQuestions";
 import { prioritizeQuickQuestions } from "../utils/welcomePersonalization";
+import { WelcomeAttentionCard } from "./WelcomeAttentionCard";
 
 interface WelcomePanelProps {
   name: string;
@@ -29,6 +30,7 @@ export function WelcomePanel({
   const firstName = name.split(" ")[0];
 
   const attentionItems = snapshot?.attention_items ?? [];
+  const manyAlerts = attentionItems.length >= 3;
 
   const basePrompts = showMorePrompts
     ? [...QUICK_QUESTIONS_TO_GET_STARTED, ...QUICK_QUESTIONS_ANALYTICS]
@@ -43,7 +45,14 @@ export function WelcomePanel({
   }, [basePrompts, snapshot]);
 
   return (
-    <div className="welcome-panel flex min-h-0 flex-1 flex-col items-center justify-center px-5 py-6 sm:px-6">
+    <div
+      className={[
+        "welcome-panel flex min-h-0 flex-1 flex-col items-center px-5 py-6 sm:px-6",
+        manyAlerts
+          ? "justify-start overflow-y-auto sm:py-8"
+          : "justify-center",
+      ].join(" ")}
+    >
       <div className="welcome-landing w-full max-w-[600px]">
         <header className="text-center">
           <h1 className="welcome-heading text-[26px] font-semibold tracking-tight text-[var(--color-brand)] sm:text-[30px]">
@@ -64,73 +73,60 @@ export function WelcomePanel({
         ) : snapshot ? (
           <>
             <section
-              className="welcome-snapshot welcome-snapshot-premium mx-auto mt-8 max-w-md sm:max-w-lg"
+              className="welcome-glance-wrap welcome-snapshot-premium mx-auto mt-8 max-w-md sm:max-w-lg"
               aria-label="Account at a glance"
             >
-              <div className="welcome-snapshot-grid">
-                <div className="welcome-stat-cell">
-                  <p className="welcome-stat-label">Plan</p>
-                  <p className="welcome-stat-value">
-                    {snapshot.plan?.plan_name ?? "—"}
-                  </p>
+              <div className="welcome-snapshot welcome-snapshot--in-glance">
+                <div className="welcome-snapshot-grid">
+                  <div className="welcome-stat-cell">
+                    <p className="welcome-stat-label">Plan</p>
+                    <p className="welcome-stat-value">
+                      {snapshot.plan?.plan_name ?? "—"}
+                    </p>
+                  </div>
+                  <div className="welcome-stat-cell">
+                    <p className="welcome-stat-label">Usage</p>
+                    <p className="welcome-stat-value">
+                      {snapshot.usage_headline ?? "—"}
+                    </p>
+                  </div>
+                  <div className="welcome-stat-cell">
+                    <p className="welcome-stat-label">Bill</p>
+                    <p className="welcome-stat-value">
+                      {snapshot.bill
+                        ? formatInr(snapshot.bill.amount)
+                        : "—"}
+                    </p>
+                  </div>
                 </div>
-                <div className="welcome-stat-cell">
-                  <p className="welcome-stat-label">Usage</p>
-                  <p className="welcome-stat-value">
-                    {snapshot.usage_headline ?? "—"}
+
+                {snapshot.projected_bill && (
+                  <p className="welcome-snapshot-foot">
+                    Est. this month:{" "}
+                    <strong>
+                      {formatInr(snapshot.projected_bill.estimated_amount)}
+                    </strong>
                   </p>
-                </div>
-                <div className="welcome-stat-cell">
-                  <p className="welcome-stat-label">Bill</p>
-                  <p className="welcome-stat-value">
-                    {snapshot.bill
-                      ? formatInr(snapshot.bill.amount)
-                      : "—"}
-                  </p>
-                </div>
+                )}
               </div>
 
-              {snapshot.projected_bill && (
-                <p className="welcome-snapshot-foot">
-                  Est. this month:{" "}
-                  <strong>
-                    {formatInr(snapshot.projected_bill.estimated_amount)}
-                  </strong>
-                </p>
+              {!loading && attentionItems.length > 0 && (
+                <WelcomeAttentionCard
+                  items={attentionItems}
+                  disabled={disabled}
+                  onPrompt={onPrompt}
+                />
               )}
             </section>
-
-            {!loading && attentionItems.length > 0 && (
-              <div
-                className="mx-auto mt-4 flex max-w-md flex-wrap justify-center gap-1.5"
-                aria-label="Account attention"
-              >
-                {attentionItems.slice(0, 3).map((item) => (
-                  <button
-                    key={`${item.domain}-${item.message}`}
-                    type="button"
-                    disabled={disabled || !item.prompt}
-                    onClick={() => {
-                      if (item.prompt) {
-                        onPrompt(item.prompt);
-                      }
-                    }}
-                    className={[
-                      "welcome-attention-chip",
-                      item.severity === "high"
-                        ? "welcome-attention-chip--high"
-                        : "",
-                    ].join(" ")}
-                  >
-                    {item.domain}
-                  </button>
-                ))}
-              </div>
-            )}
           </>
         ) : null}
 
-        <div className="welcome-topics welcome-topics--landing">
+        <div
+          className={[
+            "welcome-topics welcome-topics--landing",
+            manyAlerts ? "welcome-topics--compact" : "",
+          ].join(" ")}
+        >
           <p className="welcome-section-label">Quick questions</p>
 
           <div

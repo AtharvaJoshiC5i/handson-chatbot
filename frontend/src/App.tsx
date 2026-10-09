@@ -3,7 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import {
   CircleAlert,
   Database,
-  LayoutDashboard,
   MessagesSquare,
   Plus,
   Signal,
@@ -14,7 +13,6 @@ import { ChatWindow } from "./components/ChatWindow";
 import { CustomerSelector } from "./components/CustomerSelector";
 import { MessageInput } from "./components/MessageInput";
 import { WelcomePanel } from "./components/WelcomePanel";
-import { AccountOverviewPage } from "./pages/AccountOverviewPage";
 import { DatabaseExplorerPage } from "./pages/DatabaseExplorerPage";
 import {
   getAccountSnapshot,
@@ -31,7 +29,7 @@ import type {
 } from "./types/account";
 import type { ChatMessage } from "./types/chat";
 
-type AppPage = "support" | "account" | "database";
+type AppPage = "support" | "database";
 
 function createMessageId(): string {
   return `${Date.now()}-${Math.random()
@@ -45,8 +43,8 @@ function createConversationId(): string {
 }
 
 function headerTitle(appPage: AppPage): string {
-  if (appPage === "account") {
-    return "Account overview";
+  if (appPage === "database") {
+    return "Database viewer";
   }
 
   return "Account support";
@@ -152,6 +150,8 @@ export default function App() {
     const assistantMessageId = createMessageId();
     const abortController = new AbortController();
     let streamedText = "";
+    let widgetOnlyResponse = false;
+    let useMetadataMessageOnly = false;
     abortControllerRef.current = abortController;
 
     setMessages((current) => [
@@ -175,11 +175,20 @@ export default function App() {
         conversationId,
         {
           onMetadata: (response) => {
+            widgetOnlyResponse =
+              response.presentation?.type === "customer_360";
+            const metadataMessage = response.message?.trim() ?? "";
+            useMetadataMessageOnly =
+              !widgetOnlyResponse && metadataMessage.length > 0;
+
             setMessages((current) =>
               current.map((message) =>
                 message.id === assistantMessageId
                   ? {
                       ...message,
+                      content: widgetOnlyResponse
+                        ? ""
+                        : metadataMessage || message.content,
                       status: response.status,
                       source: response.source,
                       presentation: response.presentation,
@@ -190,6 +199,10 @@ export default function App() {
             );
           },
           onText: (text) => {
+            if (widgetOnlyResponse || useMetadataMessageOnly) {
+              return;
+            }
+
             streamedText += text;
             setMessages((current) =>
               current.map((message) =>
@@ -320,15 +333,6 @@ export default function App() {
           </button>
           <button
             type="button"
-            onClick={() => setAppPage("account")}
-            className="ui-nav-item"
-            data-active={appPage === "account" ? "true" : undefined}
-          >
-            <LayoutDashboard size={15} strokeWidth={1.8} aria-hidden="true" />
-            Account
-          </button>
-          <button
-            type="button"
             onClick={() => setAppPage("database")}
             className="ui-nav-item"
             data-active={appPage === "database" ? "true" : undefined}
@@ -357,18 +361,10 @@ export default function App() {
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {appPage === "database" ? (
-          <DatabaseExplorerPage />
-        ) : appPage === "account" ? (
           <>
             {sharedHeader}
             <main className="chat-canvas flex min-h-0 flex-1 flex-col overflow-hidden">
-              <AccountOverviewPage
-                displayName={displayName}
-                snapshot={snapshot}
-                loading={snapshotLoading}
-                onAskInChat={handleSend}
-                disabled={loading}
-              />
+              <DatabaseExplorerPage customerId={customerId} />
             </main>
           </>
         ) : (
@@ -439,19 +435,6 @@ export default function App() {
           </button>
           <button
             type="button"
-            onClick={() => setAppPage("account")}
-            className={[
-              "flex flex-1 flex-col items-center gap-0.5 rounded-lg py-2 text-[10px] font-semibold transition",
-              appPage === "account"
-                ? "bg-white text-[var(--color-brand)] shadow-sm ring-1 ring-[var(--color-line)]"
-                : "text-[#96a198]",
-            ].join(" ")}
-          >
-            <LayoutDashboard size={16} aria-hidden="true" />
-            Account
-          </button>
-          <button
-            type="button"
             onClick={() => setAppPage("database")}
             className={[
               "flex flex-1 flex-col items-center gap-0.5 rounded-lg py-2 text-[10px] font-semibold transition",
@@ -461,7 +444,7 @@ export default function App() {
             ].join(" ")}
           >
             <Database size={16} aria-hidden="true" />
-            Database
+            Data
           </button>
         </nav>
       </div>

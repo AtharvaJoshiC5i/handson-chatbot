@@ -77,9 +77,8 @@ function collectFromUserMessage(userMessage: string): string[] {
   ) {
     out.push(
       "Compare my latest bill with the previous one",
-      "What is my average bill?",
       "Break down my current bill",
-      "How much did I spend on roaming in the last 6 months?",
+      "Show my last 5 bills",
     );
   }
 
@@ -90,7 +89,7 @@ function collectFromUserMessage(userMessage: string): string[] {
     out.push(
       "Why did my bill change from last month?",
       "Reconcile my current bill and payments",
-      "How much tax was on my recent bills?",
+      "Compare my latest bill with the previous one",
     );
   }
 
@@ -100,8 +99,8 @@ function collectFromUserMessage(userMessage: string): string[] {
   ) {
     out.push(
       "Break down my latest bill",
-      "Show my bill trend over the last 6 months",
-      "How much have I spent on my last 3 bills?",
+      "Show my last 5 bills",
+      "Why did my bill change from last month?",
     );
   }
 
@@ -137,7 +136,7 @@ function collectFromUserMessage(userMessage: string): string[] {
     || /\baverage bill\b/.test(u)
   ) {
     out.push(
-      "Show my bill trend over the last 6 months",
+      "Compare my latest bill with the previous one",
       "Show my last 5 bills",
       "Break down my current bill",
     );
@@ -150,7 +149,7 @@ function collectFromUserMessage(userMessage: string): string[] {
     out.push(
       "What is the status of my latest payment?",
       "Reconcile my current bill and payments",
-      "Summarize my payments this year",
+      "Show my last 5 payments",
       "Is autopay enabled?",
     );
   }
@@ -184,7 +183,7 @@ function collectFromUserMessage(userMessage: string): string[] {
       "How much data do I have remaining?",
       "What percentage of my data allowance have I used?",
       "Show my data usage history for the last 6 months",
-      "Compare June and August data usage",
+      "Summarize my usage this month",
     );
   }
 
@@ -194,9 +193,9 @@ function collectFromUserMessage(userMessage: string): string[] {
     && /\busage\b/.test(u)
   ) {
     out.push(
-      "What is my average monthly data usage?",
-      "Which month had my highest data usage?",
+      "Show my data usage history for the last 6 months",
       "How much data have I used this month?",
+      "Summarize my usage this month",
     );
   }
 
@@ -297,13 +296,6 @@ function collectFromPresentation(
   const out: string[] = [];
   const title = presentationTitle(presentation);
 
-  if (presentation.type === "customer_360") {
-    out.push(
-      "Is anything on my account in need of attention?",
-      "Explain my bill charges and payment status",
-    );
-  }
-
   if (
     presentation.type === "key_value"
     && presentation.items.some((item) =>
@@ -328,8 +320,8 @@ function collectFromPresentation(
     && (title.includes("usage") || title.includes("data") || title.includes("voice"))
   ) {
     out.push(
-      "What is my average monthly data usage?",
       "How much data do I have remaining?",
+      "Summarize my usage this month",
     );
   }
 
@@ -346,7 +338,7 @@ function collectFromPresentation(
   if (presentation.type === "comparison") {
     out.push(
       "Why did my bill change from last month?",
-      "Show my bill trend over the last 6 months",
+      "Show my last 5 bills",
     );
   }
 

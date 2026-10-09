@@ -18,6 +18,8 @@ from app.database.queries.bills import (
     get_bill_items,
     get_bills_for_date_range,
     get_filtered_bills,
+    get_non_paid_bills,
+    get_current_statement_bill,
     get_latest_bill,
     get_previous_bill,
 )
@@ -126,7 +128,7 @@ def _resolve_bill(
             plan_type=plan_type,
         )
 
-    return get_latest_bill(
+    return get_current_statement_bill(
         db,
         customer.customer_id,
         plan_type=plan_type,
@@ -190,7 +192,7 @@ def get_current_bill(
         return ambiguity
 
     try:
-        bill = get_latest_bill(
+        bill = get_current_statement_bill(
             db,
             customer.customer_id,
             plan_type=plan_type,
@@ -203,13 +205,20 @@ def get_current_bill(
         )
 
     if bill is None:
+        line_hint = ""
+        if plan_type is not None:
+            line_hint = (
+                f" I don't see a {plan_type.lower()} line "
+                "or a closed statement bill for that service."
+            )
         return not_found_result(
             source=source_for_table(
                 "bills"
             ),
             message=(
-                "I don't have a bill record "
+                "I don't have a matching bill record "
                 "for your account."
+                f"{line_hint}"
             ),
         )
 
@@ -457,14 +466,29 @@ def _comparison_bills(
     year: int | None = None,
     comparison_month: int | None = None,
     comparison_year: int | None = None,
+    plan_type: str | None = None,
 ):
-    current = _resolve_bill(
-        db,
-        customer,
-        bill_id=current_bill_id,
-        month=month,
-        year=year,
-    )
+    if current_bill_id is not None:
+        current = get_bill_by_id_for_customer(
+            db,
+            customer.customer_id,
+            current_bill_id,
+        )
+    elif month is not None:
+        current = _resolve_bill(
+            db,
+            customer,
+            bill_id=None,
+            month=month,
+            year=year,
+            plan_type=plan_type,
+        )
+    else:
+        current = get_latest_bill(
+            db,
+            customer.customer_id,
+            plan_type=plan_type,
+        )
 
     if current is None:
         return (
@@ -504,6 +528,7 @@ def _comparison_bills(
             current[
                 "billing_period_start"
             ],
+            plan_type=plan_type,
         )
 
     return (
@@ -1268,27 +1293,41 @@ def filter_bills(
     plan_type: str | None = None,
 ) -> TruthResult[dict]:
     try:
-        bills = get_filtered_bills(
-            db,
-            customer.customer_id,
-            status=(
-                status_filter.value
-                if status_filter
-                is not None
-                else None
-            ),
-            minimum_amount=(
-                minimum_amount
-            ),
-            limit=limit,
-            plan_type=plan_type,
-            sort_order=(
-                sort_order.value
-                if sort_order
-                is not None
-                else "NEWEST"
-            ),
-        )
+        if status_filter == BillStatus.UNPAID:
+            bills = get_non_paid_bills(
+                db,
+                customer.customer_id,
+                limit=limit,
+                plan_type=plan_type,
+                sort_order=(
+                    sort_order.value
+                    if sort_order
+                    is not None
+                    else "NEWEST"
+                ),
+            )
+        else:
+            bills = get_filtered_bills(
+                db,
+                customer.customer_id,
+                status=(
+                    status_filter.value
+                    if status_filter
+                    is not None
+                    else None
+                ),
+                minimum_amount=(
+                    minimum_amount
+                ),
+                limit=limit,
+                plan_type=plan_type,
+                sort_order=(
+                    sort_order.value
+                    if sort_order
+                    is not None
+                    else "NEWEST"
+                ),
+            )
     except sqlite3.Error:
         return database_error_result(
             message=(
@@ -1297,6 +1336,25 @@ def filter_bills(
         )
 
     if not bills:
+        if status_filter == BillStatus.UNPAID:
+            return verified_result(
+                {
+                    "result_type": "BILL_FILTER",
+                    "status_filter": (
+                        status_filter.value
+                    ),
+                    "minimum_amount": minimum_amount,
+                    "sort_order": (
+                        sort_order.value
+                        if sort_order
+                        is not None
+                        else "NEWEST"
+                    ),
+                    "bills": [],
+                },
+                source=source_for_table("bills"),
+            )
+
         return not_found_result(
             source=source_for_table(
                 "bills"

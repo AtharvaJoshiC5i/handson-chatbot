@@ -545,6 +545,117 @@ def _format_bill_change(
     )
 
 
+def _format_bill_anomaly(
+    data: dict[str, Any],
+) -> str:
+    current = data["current_bill"]
+    previous = data["comparison_bill"]
+    amount = _money(current["amount"])
+    difference = float(data["total_difference"])
+    pct = data.get("percent_increase")
+    scope = data.get("comparison_scope") or (
+        f"{current.get('period')} vs {previous.get('period')}"
+    )
+
+    if difference <= 0:
+        return (
+            f"Your {current.get('period', 'latest')} bill is "
+            f"{amount}, which is not higher than your "
+            f"{previous.get('period', 'previous')} bill of "
+            f"{_money(previous['amount'])}."
+        )
+
+    lead = (
+        f"Your {current.get('period', 'latest')} bill is {amount}"
+    )
+    if pct is not None:
+        lead += (
+            f", which is {pct:g}% higher than your "
+            f"{previous.get('period', 'previous')} bill "
+            f"({_money(previous['amount'])})."
+        )
+    else:
+        lead += (
+            f", up by {_money(difference)} from your "
+            f"{previous.get('period', 'previous')} bill "
+            f"({_money(previous['amount'])})."
+        )
+
+    lead += f" (Comparing {scope}.)"
+    return lead
+
+
+def _format_plan_recommendation(
+    data: dict[str, Any],
+) -> str:
+    status = data.get("recommendation_status", "")
+    current = data.get("current_plan") or {}
+    current_name = current.get("plan_name", "your plan")
+    reasons = data.get("recommendation_reasons") or []
+    recommended = data.get("recommended_plan") or {}
+    rec_name = recommended.get("plan_name")
+
+    if status == "INSUFFICIENT_USAGE":
+        if reasons:
+            return reasons[0]
+        return (
+            "I need a little more usage history before I can "
+            "recommend a different plan."
+        )
+
+    if status == "ALREADY_OPTIMAL":
+        if reasons:
+            return " ".join(reasons)
+        return (
+            f"You're on {current_name} with unlimited data — "
+            "there's no smaller data plan to switch to."
+        )
+
+    if status == "KEEP_CURRENT":
+        if reasons:
+            return " ".join(reasons)
+        return (
+            f"Based on your usage, {current_name} still looks "
+            "like the right fit."
+        )
+
+    if reasons:
+        lead = (
+            f"Based on your recent usage, {rec_name} is a better "
+            f"fit than {current_name}."
+            if rec_name
+            else "Based on your recent usage, here is our suggestion."
+        )
+        return f"{lead} {' '.join(reasons)}"
+
+    savings = float(
+        data.get("estimated_monthly_savings") or 0
+    )
+    avg = data.get("average_monthly_data_gb")
+    current_limit = current.get("data_limit_gb")
+
+    if avg is not None and current_limit is not None:
+        intro = (
+            f"You currently use an average of {avg:g} GB of data "
+            f"per month, while your plan provides "
+            f"{current_limit:g} GB."
+        )
+    else:
+        intro = f"You're on {current_name}."
+
+    if savings > 0 and rec_name:
+        return (
+            f"{intro} Based on your usage, {rec_name} would likely "
+            f"be sufficient. Estimated saving: "
+            f"₹{int(round(savings))}/month."
+        )
+
+    return (
+        f"{intro} {rec_name or 'Another plan'} may also suit your "
+        f"usage pattern."
+    )
+
+
 def _format_insufficient_bill_change(
     data: dict[str, Any],
 ) -> str:
@@ -640,6 +751,14 @@ def _format_bill_filter(
         [],
     )
 
+    if not bills:
+        if data.get("status_filter") == "UNPAID":
+            return (
+                "You don't have any unpaid, overdue, or "
+                "partially paid bills on your account."
+            )
+        return "I don't have any bills matching those criteria."
+
     return (
         f"I found {len(bills)} matching "
         f"{'bill' if len(bills) == 1 else 'bills'}."
@@ -676,8 +795,21 @@ def _format_latest_payment(
         "payment"
     ]
 
+    bill = data.get("bill")
+    bill_period = (
+        bill.get("period")
+        if isinstance(bill, dict)
+        else payment.get("bill_period")
+    )
+
+    period_prefix = (
+        f"For your {bill_period} bill, "
+        if bill_period
+        else ""
+    )
+
     text = (
-        "Your latest payment attempt was "
+        f"{period_prefix}your latest payment attempt was "
         f"{_money(payment['amount'])} via "
         f"{_label(payment['payment_method'])} on "
         f"{payment['payment_date']}. "
@@ -694,6 +826,24 @@ def _format_latest_payment(
             f" Transaction reference: "
             f"{reference}."
         )
+
+    if bill_period and data.get("bill_amount") is not None:
+        text += (
+            f" The {bill_period} bill total is "
+            f"{_money(data['bill_amount'])}."
+        )
+
+    if data.get("is_fully_paid") is False and (
+        data.get("outstanding_amount") is not None
+    ):
+        text += (
+            f" {_money(data['successful_paid_amount'])} "
+            "has been applied successfully, and "
+            f"{_money(data['outstanding_amount'])} "
+            "remains outstanding on that bill."
+        )
+    elif data.get("is_fully_paid"):
+        text += " That bill is fully paid based on recorded successful payments."
 
     return text
 
@@ -1301,7 +1451,14 @@ def _format_bill_payment_status(
             "payments."
         )
 
-    return (
+    failed_count = int(
+        payment.get("failed_attempt_count") or 0
+    )
+    pending_amount = float(
+        payment.get("pending_amount") or 0
+    )
+
+    lead = (
         f"Your {bill['period']} bill is "
         f"{_money(bill['amount'])}. "
         f"{_money(payment['successful_paid_amount'])} "
@@ -1309,6 +1466,23 @@ def _format_bill_payment_status(
         f"{_money(payment['outstanding_amount'])} "
         "remains outstanding."
     )
+
+    extras: list[str] = []
+    if failed_count > 0:
+        extras.append(
+            f"{failed_count} payment "
+            f"{'attempt' if failed_count == 1 else 'attempts'} "
+            "failed and did not reduce the balance"
+        )
+    if pending_amount > 0:
+        extras.append(
+            f"{_money(pending_amount)} is still pending clearance"
+        )
+
+    if not extras:
+        return lead
+
+    return f"{lead} {' '.join(extras)}."
 
 
 def _format_bill_payment_explanation(
@@ -1451,49 +1625,23 @@ def _format_attention_summary(
     )
 
 
+def _usage_amount(
+    value: Any,
+    unit: str,
+) -> str:
+    if value is None:
+        return "unavailable"
+
+    unit_label = (unit or "").strip() or "units"
+    return f"{_number(value)} {unit_label}"
+
+
 def _format_customer_360(
     data: dict[str, Any],
 ) -> str:
-    account = data.get(
-        "account",
-        {},
-    )
-    account_status = _label(
-        account.get("account_status"),
-    ).lower() or "unavailable"
+    """Widget carries the full snapshot; chat shows structured UI only."""
 
-    plan = data.get("plan")
-    plan_name = (
-        plan.get("plan_name")
-        if plan is not None
-        else "your plan"
-    )
-
-    attention = data.get(
-        "attention",
-        {},
-    )
-    attention_items = attention.get(
-        "items",
-        [],
-    )
-
-    lead = (
-        f"Here is your account overview. Your account is "
-        f"{account_status} on {plan_name}."
-    )
-
-    if attention_items:
-        lead += (
-            f" {attention_items[0]['message']}"
-        )
-    else:
-        lead += (
-            " Open the sections below for usage, billing, "
-            "payments, and support."
-        )
-
-    return lead
+    return ""
 
 
 
@@ -1648,8 +1796,13 @@ def _format_projected_bill(data: dict) -> str:
 
 def _format_payment_profile(data: dict) -> str:
     autopay = (
-        "enabled" if data["autopay_enabled"] else "disabled"
+        "enabled" if data["autopay_enabled"] else "not enabled"
     )
+    if not data.get("has_saved_profile", True):
+        return (
+            f"Autopay is {autopay}. No payment method is "
+            "saved on file for this account."
+        )
     label = data.get("payment_method_label") or "not on file"
     method = data.get("default_payment_method") or "none"
     return (
@@ -1691,6 +1844,8 @@ FORMATTERS = {
     "BILL_BREAKDOWN": _format_bill_breakdown,
     "BILL_COMPARISON": _format_bill_comparison,
     "BILL_CHANGE_EXPLANATION": _format_bill_change,
+    "BILL_ANOMALY_DETECTION": _format_bill_anomaly,
+    "PLAN_RECOMMENDATION": _format_plan_recommendation,
     "SUBSCRIPTION_LIST": _format_subscription_list,
     "PLAN_RENEWAL": _format_plan_renewal,
     "PLAN_CATALOG": _format_plan_catalog,

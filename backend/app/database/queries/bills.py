@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 import sqlite3
 
 _BILL_SELECT = """
@@ -62,6 +63,49 @@ def get_latest_bill(
         LIMIT 1
         """,
         (customer_id, *plan_params),
+    ).fetchone()
+
+
+def get_current_statement_bill(
+    db: sqlite3.Connection,
+    customer_id: str,
+    *,
+    plan_type: str | None = None,
+    as_of: date | None = None,
+) -> sqlite3.Row | None:
+    """
+    Latest bill whose billing period has ended (statement bill).
+
+    In-progress cycle bills (period end after today) are excluded so
+    "current bill" aligns with the latest closed statement month.
+    """
+
+    reference_date = (
+        as_of or date.today()
+    ).isoformat()
+
+    plan_clause, plan_params = _plan_type_clause(
+        plan_type,
+    )
+
+    return db.execute(
+        f"""
+        SELECT
+            {_BILL_SELECT}
+        {_BILL_FROM}
+        WHERE b.customer_id = ?
+          AND b.billing_period_end <= ?
+        {plan_clause}
+        ORDER BY
+            b.billing_period_end DESC,
+            b.bill_id DESC
+        LIMIT 1
+        """,
+        (
+            customer_id,
+            reference_date,
+            *plan_params,
+        ),
     ).fetchone()
 
 
@@ -339,6 +383,57 @@ def get_filtered_bills(
         parameters.append(
             limit
         )
+
+    return db.execute(
+        sql,
+        tuple(parameters),
+    ).fetchall()
+
+
+def get_non_paid_bills(
+    db: sqlite3.Connection,
+    customer_id: str,
+    *,
+    limit: int | None = None,
+    plan_type: str | None = None,
+    sort_order: str = "NEWEST",
+) -> list[sqlite3.Row]:
+    """Bills that are unpaid, overdue, or partially paid."""
+
+    conditions = [
+        "b.customer_id = ?",
+        "b.status IN ('UNPAID', 'OVERDUE', 'PARTIALLY_PAID')",
+    ]
+    parameters: list[object] = [customer_id]
+    plan_clause, plan_params = _plan_type_clause(plan_type)
+    parameters.extend(plan_params)
+
+    order_by = {
+        "NEWEST": (
+            "b.billing_period_start DESC, "
+            "b.bill_id DESC"
+        ),
+        "OLDEST": (
+            "b.billing_period_start ASC, "
+            "b.bill_id ASC"
+        ),
+    }.get(
+        sort_order,
+        "b.billing_period_start DESC, b.bill_id DESC",
+    )
+
+    sql = f"""
+        SELECT
+            {_BILL_SELECT}
+        {_BILL_FROM}
+        WHERE {" AND ".join(conditions)}
+        {plan_clause}
+        ORDER BY {order_by}
+    """
+
+    if limit is not None:
+        sql += "\nLIMIT ?"
+        parameters.append(limit)
 
     return db.execute(
         sql,

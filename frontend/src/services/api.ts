@@ -13,6 +13,8 @@ import type {
   Customer360Table,
   KeyValueItem,
   ListItem,
+  PlanRecommendationPlan,
+  PlanRecommendationPresentation,
   SummarySection,
   TableColumn,
   TimeSeriesPoint,
@@ -367,6 +369,83 @@ function parseCustomer360Tables(
   return tables;
 }
 
+function parsePlanRecommendationPlan(
+  value: unknown,
+): PlanRecommendationPlan | null {
+  if (!isRecord(value) || !isString(value.plan_name)) {
+    return null;
+  }
+
+  const monthlyPrice = value.monthly_price;
+  const dataLimit = value.data_limit_gb;
+
+  return {
+    plan_name: value.plan_name,
+    monthly_price:
+      typeof monthlyPrice === "number" && Number.isFinite(monthlyPrice)
+        ? monthlyPrice
+        : null,
+    data_limit_gb:
+      typeof dataLimit === "number" && Number.isFinite(dataLimit)
+        ? dataLimit
+        : null,
+  };
+}
+
+function parsePlanRecommendation(
+  value: Record<string, unknown>,
+  title: string | null | undefined,
+): PlanRecommendationPresentation | null {
+  const current = parsePlanRecommendationPlan(value.current);
+
+  if (!current || !isString(value.recommendation_status)) {
+    return null;
+  }
+
+  const recommended = value.recommended === null
+    || value.recommended === undefined
+    ? null
+    : parsePlanRecommendationPlan(value.recommended);
+
+  if (value.recommended !== null && value.recommended !== undefined && !recommended) {
+    return null;
+  }
+
+  const reasons: string[] = [];
+  if (Array.isArray(value.reasons)) {
+    for (const reason of value.reasons) {
+      if (!isString(reason)) {
+        return null;
+      }
+      reasons.push(reason);
+    }
+  }
+
+  const avg = value.average_monthly_data_gb;
+  const months = value.months_sampled;
+  const utilization = value.utilization_percent;
+  const savings = value.estimated_monthly_savings;
+
+  return {
+    type: "plan_recommendation",
+    title,
+    recommendation_status: value.recommendation_status,
+    current,
+    recommended,
+    average_monthly_data_gb:
+      typeof avg === "number" && Number.isFinite(avg) ? avg : null,
+    months_sampled:
+      typeof months === "number" && Number.isFinite(months) ? months : null,
+    utilization_percent:
+      typeof utilization === "number" && Number.isFinite(utilization)
+        ? utilization
+        : null,
+    estimated_monthly_savings:
+      typeof savings === "number" && Number.isFinite(savings) ? savings : null,
+    reasons,
+  };
+}
+
 function parsePresentation(value: unknown): ChatPresentation | null {
   if (!isRecord(value) || !isString(value.type)) {
     return null;
@@ -477,6 +556,16 @@ function parsePresentation(value: unknown): ChatPresentation | null {
       };
     }
 
+    case "plan_recommendation": {
+      const presentation = parsePlanRecommendation(value, title);
+
+      if (!presentation) {
+        return null;
+      }
+
+      return presentation;
+    }
+
     case "customer_360": {
       const sections = parseSummarySections(
         value.sections,
@@ -485,7 +574,7 @@ function parsePresentation(value: unknown): ChatPresentation | null {
         value.tables,
       );
 
-      if (!sections || !tables) {
+      if (!sections) {
         return null;
       }
 
@@ -493,7 +582,7 @@ function parsePresentation(value: unknown): ChatPresentation | null {
         type: "customer_360",
         title,
         sections,
-        tables,
+        tables: tables ?? [],
       };
     }
 

@@ -5,7 +5,7 @@ from app.llm.client import (
     classify_deterministic_request,
 )
 from app.models.domain import Intent, TruthStatus, CustomerContext
-from app.models.llm import IntentParameters
+from app.models.llm import IntentParameters, LLMIntentResponse
 from app.services.chat_service import ChatService
 from app.truth.result import TruthResult
 from app.truth.sources import DATABASE_SOURCE
@@ -109,24 +109,82 @@ def test_usage_graph_with_data_type_routes_to_history() -> None:
     assert result.parameters.month_count == 4
 
 
-def test_explorer_parity_phrases_classify_deterministically() -> None:
+def test_unpaid_bills_routes_to_filter_not_payment_status() -> None:
+    result = classify_deterministic_request(
+        "do I have any previously unpaid bills",
+    )
+
+    assert result is not None
+    assert result.intent == Intent.FILTER_BILLS
+    assert result.parameters.status_filter.value == "UNPAID"
+
+
+def test_open_cases_routes_to_support_tickets() -> None:
+    result = classify_deterministic_request(
+        "Show my open cases.",
+    )
+
+    assert result is not None
+    assert result.intent == Intent.GET_SUPPORT_TICKETS
+    assert result.parameters.ticket_status.value == "OPEN"
+
+
+def test_router_question_filters_device_type() -> None:
+    result = classify_deterministic_request(
+        "Do I have a router registered?",
+    )
+
+    assert result is not None
+    assert result.intent == Intent.FILTER_DEVICES
+    assert result.parameters.device_type.value == "ROUTER"
+
+
+def test_latest_bill_compare_strips_hallucinated_month_params() -> None:
+    from app.llm.client import _normalize_extracted_intent
+    from app.models.llm import IntentParameters
+
+    normalized = _normalize_extracted_intent(
+        LLMIntentResponse(
+            intent=Intent.GET_BILL_COMPARISON,
+            parameters=IntentParameters(
+                month=1,
+                year=2026,
+                comparison_month=12,
+                comparison_year=2025,
+            ),
+        ),
+        "Compare my latest bill with the previous one.",
+    )
+
+    assert normalized.parameters.month is None
+    assert normalized.parameters.comparison_month is None
+
+
+def test_plan_id_compare_routes_deterministically() -> None:
+    result = classify_deterministic_request(
+        "Compare PLAN001 and PLAN003",
+    )
+
+    assert result is not None
+    assert result.intent == Intent.GET_PLAN_COMPARISON
+    assert result.parameters.plan_id == "PLAN001"
+    assert result.parameters.comparison_plan_id == "PLAN003"
+
+
+def test_named_month_usage_compare_routes_to_comparison() -> None:
+    result = classify_deterministic_request(
+        "compare June data usage with August",
+    )
+
+    assert result is not None
+    assert result.intent == Intent.GET_USAGE_COMPARISON
+    assert result.parameters.usage_type.value == "DATA"
+    assert result.parameters.month == 8
+    assert result.parameters.comparison_month == 6
+
+
+def test_payment_profile_phrases_classify_deterministically() -> None:
     cases = [
-        (
-            "Show my daily usage records",
-            Intent.LIST_USAGE_RECORDS,
-        ),
-        (
-            "List bill line items on my bills",
-            Intent.LIST_BILL_ITEMS,
-        ),
-        (
-            "List all support ticket updates",
-            Intent.LIST_TICKET_UPDATES,
-        ),
-        (
-            "Show details for plan PLAN002",
-            Intent.GET_PLAN_DETAILS,
-        ),
         (
             "Do I have any account credits?",
             Intent.GET_ACCOUNT_CREDITS,

@@ -19,6 +19,7 @@ PRESENTATION_RESULT_TYPES = frozenset(
         "BILL_COMPARISON",
         "BILL_FILTER",
         "PLAN_RENEWAL",
+        "PLAN_COMPARISON",
         "PAYMENT_HISTORY",
         "PAYMENT_FILTER",
         "SUPPORT_HISTORY",
@@ -35,6 +36,8 @@ PRESENTATION_RESULT_TYPES = frozenset(
         "CROSS_ACCOUNT_PLAN_STATUS",
         "CROSS_ACCOUNT_ATTENTION_SUMMARY",
         "CUSTOMER_360",
+        "BILL_ANOMALY_DETECTION",
+        "PLAN_RECOMMENDATION",
     },
 )
 
@@ -43,6 +46,8 @@ def should_skip_response_rewrite(
     status: TruthStatus,
     presentation: ChatPresentation | None,
     mode: str,
+    *,
+    result_type: str | None = None,
 ) -> bool:
     if status != TruthStatus.VERIFIED:
         return True
@@ -50,6 +55,17 @@ def should_skip_response_rewrite(
     normalized = mode.strip().lower()
 
     if normalized == "off":
+        return True
+
+    if result_type == "CUSTOMER_360":
+        return True
+
+    if result_type in {
+        "PAYMENT_LATEST",
+        "PAYMENT_PROFILE",
+        "PAYMENT_RECONCILIATION",
+        "CROSS_BILL_PAYMENT_STATUS",
+    }:
         return True
 
     if presentation is not None and normalized in {
@@ -65,8 +81,15 @@ def rewrite_max_tokens(
     settings: Settings,
     *,
     has_presentation: bool,
+    result_type: str | None = None,
 ) -> int:
     mode = settings.response_llm_mode.strip().lower()
+
+    if result_type == "CUSTOMER_360":
+        return min(
+            settings.response_max_tokens_light,
+            160,
+        )
 
     if mode == "full":
         return settings.response_max_tokens_full

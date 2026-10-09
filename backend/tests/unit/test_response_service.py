@@ -68,6 +68,7 @@ def test_chat_service_uses_llm_answer_for_verified_and_clarification_results() -
 			backend_output: str,
 			*,
 			max_tokens: int | None = None,
+			narrative_profile: str = "default",
 		) -> str:
 			self.received.append(backend_output)
 			return f"Personalized answer: {backend_output}"

@@ -23,13 +23,28 @@ def get_latest_payment(
     customer_id: str,
 ) -> sqlite3.Row | None:
     return db.execute(
-        f"""
-        SELECT {PAYMENT_FIELDS}
-        FROM payments
-        WHERE customer_id = ?
+        """
+        SELECT
+            p.payment_id,
+            p.bill_id,
+            p.customer_id,
+            p.amount,
+            p.payment_date,
+            p.payment_method,
+            p.status,
+            p.transaction_reference,
+            p.failure_reason,
+            b.billing_period_start,
+            b.billing_period_end,
+            b.amount AS bill_amount
+        FROM payments p
+        LEFT JOIN bills b
+          ON b.bill_id = p.bill_id
+         AND b.customer_id = p.customer_id
+        WHERE p.customer_id = ?
         ORDER BY
-            payment_date DESC,
-            payment_id DESC
+            p.payment_date DESC,
+            p.payment_id DESC
         LIMIT 1
         """,
         (customer_id,),
@@ -97,52 +112,66 @@ def get_payment_history(
     end_date: str | None = None,
 ) -> list[sqlite3.Row]:
     conditions = [
-        "customer_id = ?"
+        "p.customer_id = ?",
     ]
 
     parameters: list[object] = [
-        customer_id
+        customer_id,
     ]
 
     if status is not None:
         conditions.append(
-            "status = ?"
+            "p.status = ?",
         )
         parameters.append(
-            status
+            status,
         )
 
     if payment_method is not None:
         conditions.append(
-            "payment_method = ?"
+            "p.payment_method = ?",
         )
         parameters.append(
-            payment_method
+            payment_method,
         )
 
     if start_date is not None:
         conditions.append(
-            "substr(payment_date, 1, 10) >= ?"
+            "substr(p.payment_date, 1, 10) >= ?",
         )
         parameters.append(
-            start_date
+            start_date,
         )
 
     if end_date is not None:
         conditions.append(
-            "substr(payment_date, 1, 10) <= ?"
+            "substr(p.payment_date, 1, 10) <= ?",
         )
         parameters.append(
-            end_date
+            end_date,
         )
 
     sql = f"""
-        SELECT {PAYMENT_FIELDS}
-        FROM payments
+        SELECT
+            p.payment_id,
+            p.bill_id,
+            p.customer_id,
+            p.amount,
+            p.payment_date,
+            p.payment_method,
+            p.status,
+            p.transaction_reference,
+            p.failure_reason,
+            b.billing_period_start,
+            b.billing_period_end
+        FROM payments p
+        LEFT JOIN bills b
+          ON b.bill_id = p.bill_id
+         AND b.customer_id = p.customer_id
         WHERE {" AND ".join(conditions)}
         ORDER BY
-            payment_date DESC,
-            payment_id DESC
+            p.payment_date DESC,
+            p.payment_id DESC
     """
 
     if limit is not None:

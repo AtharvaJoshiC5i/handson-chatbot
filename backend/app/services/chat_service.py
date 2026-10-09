@@ -43,6 +43,15 @@ from app.utils.errors import LLMError
 _DEFAULT_CONVERSATION_SERVICE = ConversationService()
 
 
+def _narrative_profile(
+    result_type: str | None,
+) -> str:
+    if result_type == "CUSTOMER_360":
+        return "customer_360"
+
+    return "default"
+
+
 def _result_type_from_truth(
     truth_result: TruthResult,
 ) -> str | None:
@@ -149,45 +158,77 @@ class ChatService:
                 intent_name=intent_name,
             )
         )
-        metadata = self._build_chat_response(
-            truth_result=truth_result,
-            options=options,
-            intent_name=intent_name,
-            message_override=backend_output
-            if skip_rewrite
-            else "",
-            presentation=presentation,
-            skip_rewrite=skip_rewrite,
-            backend_output=backend_output,
+        result_type = _result_type_from_truth(
+            truth_result,
         )
+        widget_only = result_type == "CUSTOMER_360"
 
-        if skip_rewrite:
-            return metadata, iter((backend_output,))
+        if widget_only:
+            skip_rewrite = True
+            backend_output = ""
+
+        source = None
+        if truth_result.source is not None:
+            source = truth_result.source.source_name
+
+        if skip_rewrite or widget_only:
+            narrative_message = ""
+            if not widget_only and presentation is None:
+                narrative_message = backend_output
+            metadata = ChatResponse(
+                message=narrative_message,
+                status=truth_result.status.value,
+                source=source,
+                presentation=presentation,
+                options=options,
+            )
+            return metadata, iter(())
+
+        metadata = ChatResponse(
+            message="",
+            status=truth_result.status.value,
+            source=source,
+            presentation=presentation,
+            options=options,
+        )
 
         generate_response_stream = getattr(
             self._llm_client,
             "generate_response_stream",
             None,
         )
+        result_type = _result_type_from_truth(
+            truth_result,
+        )
+        profile = _narrative_profile(result_type)
+
         if callable(generate_response_stream):
             token_cap = rewrite_max_tokens(
                 get_settings(),
                 has_presentation=presentation is not None,
+                result_type=result_type,
             )
             text_stream = generate_response_stream(
                 backend_output,
                 max_tokens=token_cap,
+                narrative_profile=profile,
             )
 
             def stream_with_backend_fallback() -> Iterator[str]:
                 received_text = False
                 try:
                     for delta in text_stream:
+                        if not delta:
+                            continue
                         received_text = True
                         yield delta
                 except LLMError:
                     if received_text:
                         raise
+                    if backend_output:
+                        yield backend_output
+                    return
+                if not received_text and backend_output:
                     yield backend_output
 
             return metadata, stream_with_backend_fallback()
@@ -201,11 +242,13 @@ class ChatService:
             token_cap = rewrite_max_tokens(
                 get_settings(),
                 has_presentation=presentation is not None,
+                result_type=result_type,
             )
             final_message = (
                 generate_response(
                     backend_output,
                     max_tokens=token_cap,
+                    narrative_profile=profile,
                 )
                 if callable(generate_response)
                 else backend_output
@@ -237,9 +280,14 @@ class ChatService:
             customer=customer,
             user_message=user_message,
             intent_response=intent_response,
-            context_hint=context.compact_hint(),
+            context_hint=context.build_intent_context(),
         )
         context.update(intent_response, truth_result)
+        context.record_turn(
+            user_message,
+            intent_response,
+            truth_result,
+        )
         options = [
             ChatOption(
                 label=option.label,
@@ -267,10 +315,14 @@ class ChatService:
             )
         )
         settings = get_settings()
+        result_type = _result_type_from_truth(
+            truth_result,
+        )
         skip_rewrite = should_skip_response_rewrite(
             truth_result.status,
             presentation,
             settings.response_llm_mode,
+            result_type=result_type,
         )
         presentation_type = (
             presentation.type
@@ -325,14 +377,22 @@ class ChatService:
                 message = backend_output
             else:
                 try:
+                    result_type = _result_type_from_truth(
+                        truth_result,
+                    )
+                    profile = _narrative_profile(
+                        result_type,
+                    )
                     token_cap = rewrite_max_tokens(
                         get_settings(),
                         has_presentation=presentation is not None,
+                        result_type=result_type,
                     )
                     message = (
                         generate_response(
                             backend_output,
                             max_tokens=token_cap,
+                            narrative_profile=profile,
                         )
                         if callable(generate_response)
                         else backend_output

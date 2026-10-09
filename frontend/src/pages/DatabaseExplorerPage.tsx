@@ -1,7 +1,20 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { ChevronLeft, ChevronRight, Database, Search } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  CreditCard,
+  Database,
+  Headphones,
+  RefreshCw,
+  Search,
+  Smartphone,
+  Table2,
+  Users,
+} from "lucide-react";
 
+import { StatusChip } from "../components/StatusChip";
+import { statusVariantForValue } from "../utils/statusChip";
 import {
   fetchDataTable,
   fetchDataTables,
@@ -24,7 +37,65 @@ const FILTER_LABELS: Record<string, string> = {
   ticket_id: "Ticket ID",
 };
 
-export function DatabaseExplorerPage() {
+const TABLE_GROUPS: {
+  id: string;
+  label: string;
+  icon: typeof Users;
+  tables: string[];
+}[] = [
+  {
+    id: "account",
+    label: "Account & catalog",
+    icon: Users,
+    tables: [
+      "customers",
+      "plans",
+      "subscriptions",
+      "customer_payment_profiles",
+      "account_credits",
+      "devices",
+    ],
+  },
+  {
+    id: "usage",
+    label: "Usage",
+    icon: Smartphone,
+    tables: ["usage"],
+  },
+  {
+    id: "billing",
+    label: "Billing & payments",
+    icon: CreditCard,
+    tables: ["bills", "bill_items", "payments"],
+  },
+  {
+    id: "support",
+    label: "Support",
+    icon: Headphones,
+    tables: ["support_tickets", "support_ticket_updates"],
+  },
+];
+
+function tableIcon(tableName: string) {
+  const group = TABLE_GROUPS.find((entry) =>
+    entry.tables.includes(tableName),
+  );
+  return group?.icon ?? Table2;
+}
+
+function isStatusColumn(column: string): boolean {
+  return /status|priority|category|item_type|payment_method|plan_type|account_status/i.test(
+    column,
+  );
+}
+
+interface DatabaseExplorerPageProps {
+  customerId?: string;
+}
+
+export function DatabaseExplorerPage({
+  customerId,
+}: DatabaseExplorerPageProps) {
   const [tables, setTables] = useState<DataTableMeta[]>([]);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
   const [result, setResult] = useState<DataTableResult | null>(null);
@@ -35,7 +106,13 @@ export function DatabaseExplorerPage() {
     Record<string, string>
   >({});
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const tablesByName = useMemo(
+    () => new Map(tables.map((table) => [table.name, table])),
+    [tables],
+  );
 
   useEffect(() => {
     void fetchDataTables()
@@ -54,12 +131,29 @@ export function DatabaseExplorerPage() {
       });
   }, []);
 
+  useEffect(() => {
+    if (!customerId || !selectedTable) {
+      return;
+    }
+
+    const meta = tablesByName.get(selectedTable);
+    if (!meta?.filters.includes("customer_id")) {
+      return;
+    }
+
+    setFilterValues((current) => ({
+      ...current,
+      customer_id: customerId,
+    }));
+    setPage(1);
+  }, [customerId, tablesByName, selectedTable]);
+
   const loadRows = useCallback(() => {
     if (!selectedTable) {
       return;
     }
 
-    setLoading(true);
+    setRefreshing(true);
     setError(null);
 
     void fetchDataTable(selectedTable, {
@@ -77,7 +171,10 @@ export function DatabaseExplorerPage() {
             : "Could not load rows.",
         );
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+        setRefreshing(false);
+      });
   }, [selectedTable, page, pageSize, search, filterValues]);
 
   useEffect(() => {
@@ -87,223 +184,288 @@ export function DatabaseExplorerPage() {
   const handleTableChange = (tableName: string) => {
     setSelectedTable(tableName);
     setPage(1);
-    setFilterValues({});
+    setFilterValues(
+      customerId && tablesByName.get(tableName)?.filters.includes("customer_id")
+        ? { customer_id: customerId }
+        : {},
+    );
     setSearch("");
   };
 
   const activeFilters = result?.filters ?? [];
+  const selectedMeta = selectedTable
+    ? tablesByName.get(selectedTable)
+    : undefined;
 
   return (
-    <div className="chat-canvas flex min-h-0 flex-1 flex-col">
-      <div className="surface-header border-b border-[var(--color-line)] px-5 py-4 sm:px-6">
-        <div className="flex items-center gap-2">
-          <Database
-            size={18}
-            className="text-[#3d6b55]"
-            aria-hidden="true"
-          />
-          <h1 className="text-[15px] font-semibold text-[#23352e]">
-            Database explorer
-          </h1>
+    <div className="db-explorer flex min-h-0 flex-1 flex-col">
+      <header className="db-explorer-hero">
+        <div className="db-explorer-hero-text">
+          <div className="db-explorer-hero-title-row">
+            <span className="db-explorer-hero-icon" aria-hidden>
+              <Database size={18} strokeWidth={2} />
+            </span>
+            <div>
+              <h1 className="db-explorer-title">Database viewer</h1>
+              <p className="db-explorer-subtitle">
+                Read-only nexatel.db — browse seeded records with search and
+                filters.
+              </p>
+            </div>
+          </div>
         </div>
-        <p className="mt-1 text-[12px] text-[#74837a]">
-          Read-only view of seeded NexaTel data for demos.
-        </p>
-      </div>
+        {selectedMeta && (
+          <div className="db-explorer-hero-stat">
+            <span className="db-explorer-hero-stat-label">Active table</span>
+            <span className="db-explorer-hero-stat-value">
+              {selectedMeta.label}
+            </span>
+            <span className="db-explorer-hero-stat-meta">
+              {selectedMeta.row_count.toLocaleString("en-IN")} rows total
+            </span>
+          </div>
+        )}
+      </header>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4 sm:p-6 lg:flex-row">
-        <aside
-          className="flex shrink-0 flex-col gap-1 overflow-y-auto rounded-lg border border-[#e2e8e3] bg-white p-2 lg:w-52"
-          aria-label="Tables"
-        >
-          {tables.map((table) => (
-            <button
-              key={table.name}
-              type="button"
-              onClick={() => handleTableChange(table.name)}
-              className={[
-                "flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-[12px]",
-                selectedTable === table.name
-                  ? "bg-[#edf3ef] font-semibold text-[#264a38]"
-                  : "text-[#52665a] hover:bg-[#f5f8f5]",
-              ].join(" ")}
-            >
-              <span>{table.label}</span>
-              <span className="tabular-nums text-[10px] text-[#96a198]">
-                {table.row_count}
-              </span>
-            </button>
-          ))}
+      <div className="db-explorer-body">
+        <aside className="db-explorer-sidebar" aria-label="Tables">
+          {TABLE_GROUPS.map((group) => {
+            const groupTables = group.tables
+              .map((name) => tablesByName.get(name))
+              .filter((table): table is DataTableMeta => Boolean(table));
+
+            if (groupTables.length === 0) {
+              return null;
+            }
+
+            const GroupIcon = group.icon;
+
+            return (
+              <section key={group.id} className="db-explorer-sidebar-group">
+                <p className="db-explorer-sidebar-heading">
+                  <GroupIcon size={12} aria-hidden />
+                  {group.label}
+                </p>
+                <ul className="db-explorer-sidebar-list">
+                  {groupTables.map((table) => {
+                    const Icon = tableIcon(table.name);
+                    const active = selectedTable === table.name;
+
+                    return (
+                      <li key={table.name}>
+                        <button
+                          type="button"
+                          onClick={() => handleTableChange(table.name)}
+                          className={[
+                            "db-explorer-table-btn",
+                            active ? "db-explorer-table-btn--active" : "",
+                          ].join(" ")}
+                        >
+                          <Icon size={14} aria-hidden className="shrink-0" />
+                          <span className="min-w-0 flex-1 truncate">
+                            {table.label}
+                          </span>
+                          <span className="db-explorer-table-count">
+                            {table.row_count.toLocaleString("en-IN")}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            );
+          })}
         </aside>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-[#e2e8e3] bg-white">
-          <div className="space-y-3 border-b border-[#edf1ed] p-4">
-            <div className="flex flex-wrap items-end gap-3">
-              <label className="flex min-w-[200px] flex-1 flex-col gap-1">
-                <span className="text-[10px] font-medium uppercase tracking-wide text-[#86938b]">
-                  Search
-                </span>
-                <div className="relative">
-                  <Search
-                    size={14}
-                    className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#96a198]"
-                    aria-hidden="true"
-                  />
-                  <input
-                    type="search"
-                    value={search}
+        <div className="db-explorer-panel">
+          <div className="db-explorer-toolbar">
+            <label className="db-explorer-search">
+              <Search size={15} aria-hidden className="db-explorer-search-icon" />
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setPage(1);
+                }}
+                placeholder="Search IDs, names, references…"
+                className="db-explorer-search-input"
+              />
+            </label>
+
+            {activeFilters.map((filterKey) => {
+              const options = result?.filter_options[filterKey] ?? [];
+
+              return (
+                <label key={filterKey} className="db-explorer-filter">
+                  <span className="db-explorer-filter-label">
+                    {FILTER_LABELS[filterKey] ?? filterKey}
+                  </span>
+                  <select
+                    value={filterValues[filterKey] ?? ""}
                     onChange={(event) => {
-                      setSearch(event.target.value);
+                      setFilterValues((current) => ({
+                        ...current,
+                        [filterKey]: event.target.value,
+                      }));
                       setPage(1);
                     }}
-                    placeholder="ID, name, reference…"
-                    className="h-9 w-full rounded-md border border-[#dce5de] bg-[#fbfcfb] pl-8 pr-3 text-[12px] outline-none focus:border-[#71927d]"
-                  />
-                </div>
-              </label>
-
-              {activeFilters.map((filterKey) => {
-                const options =
-                  result?.filter_options[filterKey] ?? [];
-
-                return (
-                  <label
-                    key={filterKey}
-                    className="flex min-w-[140px] flex-col gap-1"
+                    className="db-explorer-filter-select"
                   >
-                    <span className="text-[10px] font-medium uppercase tracking-wide text-[#86938b]">
-                      {FILTER_LABELS[filterKey] ?? filterKey}
-                    </span>
-                    <select
-                      value={filterValues[filterKey] ?? ""}
-                      onChange={(event) => {
-                        setFilterValues((current) => ({
-                          ...current,
-                          [filterKey]: event.target.value,
-                        }));
-                        setPage(1);
-                      }}
-                      className="h-9 rounded-md border border-[#dce5de] bg-[#fbfcfb] px-2 text-[12px] outline-none focus:border-[#71927d]"
-                    >
-                      <option value="">All</option>
-                      {options.map((option) => (
-                        <option key={option} value={option}>
-                          {option}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                );
-              })}
+                    <option value="">All</option>
+                    {options.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              );
+            })}
 
-              <label className="flex flex-col gap-1">
-                <span className="text-[10px] font-medium uppercase tracking-wide text-[#86938b]">
-                  Rows per page
-                </span>
-                <select
-                  value={pageSize}
-                  onChange={(event) => {
-                    setPageSize(Number.parseInt(event.target.value, 10));
-                    setPage(1);
-                  }}
-                  className="h-9 rounded-md border border-[#dce5de] bg-[#fbfcfb] px-2 text-[12px]"
-                >
-                  {[10, 25, 50, 100].map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
+            <label className="db-explorer-filter">
+              <span className="db-explorer-filter-label">Page size</span>
+              <select
+                value={pageSize}
+                onChange={(event) => {
+                  setPageSize(Number.parseInt(event.target.value, 10));
+                  setPage(1);
+                }}
+                className="db-explorer-filter-select"
+              >
+                {[10, 25, 50, 100].map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-            {result && (
-              <p className="text-[11px] text-[#96a198]">
-                {result.total_rows.toLocaleString()} rows
-                {Object.values(filterValues).some(Boolean) || search
-                  ? " (filtered)"
-                  : ""}
-              </p>
-            )}
+            <button
+              type="button"
+              onClick={() => loadRows()}
+              disabled={refreshing}
+              className="db-explorer-refresh"
+              aria-label="Refresh table"
+            >
+              <RefreshCw
+                size={15}
+                className={refreshing ? "animate-spin" : ""}
+                aria-hidden
+              />
+            </button>
           </div>
 
+          {result && (
+            <div className="db-explorer-meta">
+              <span>
+                Showing page {result.page} of {result.total_pages}
+              </span>
+              <span aria-hidden>·</span>
+              <span>
+                {result.total_rows.toLocaleString("en-IN")} matching rows
+              </span>
+              {customerId && filterValues.customer_id === customerId && (
+                <>
+                  <span aria-hidden>·</span>
+                  <span>Scoped to {customerId}</span>
+                </>
+              )}
+            </div>
+          )}
+
           {error && (
-            <p className="px-4 py-3 text-[12px] text-[#874b43]" role="alert">
+            <p className="db-explorer-error" role="alert">
               {error}
             </p>
           )}
 
-          <div className="min-h-0 flex-1 overflow-auto">
+          <div className="db-explorer-table-wrap">
             {loading && !result ? (
-              <p className="p-6 text-[12px] text-[#96a198]">Loading…</p>
+              <p className="db-explorer-empty">Loading records…</p>
             ) : result && result.columns.length > 0 ? (
-              <table className="w-full min-w-max border-collapse text-left text-[11px]">
-                <thead className="sticky top-0 bg-[#f6f8f6] shadow-[0_1px_0_#e5ebe6]">
+              <table className="db-explorer-table">
+                <thead>
                   <tr>
                     {result.columns.map((column) => (
-                      <th
-                        key={column}
-                        className="whitespace-nowrap px-3 py-2.5 font-semibold text-[#65766a]"
-                      >
-                        {column}
-                      </th>
+                      <th key={column}>{column}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {result.rows.map((row, rowIndex) => (
-                    <tr
-                      key={rowIndex}
-                      className="border-t border-[#edf1ed] hover:bg-[#fafcfb]"
-                    >
-                      {result.columns.map((column) => (
-                        <td
-                          key={column}
-                          className="max-w-[240px] truncate whitespace-nowrap px-3 py-2 text-[#34483b]"
-                          title={String(row[column] ?? "")}
-                        >
-                          {row[column] === null || row[column] === undefined
+                    <tr key={rowIndex}>
+                      {result.columns.map((column) => {
+                        const raw = row[column];
+                        const text =
+                          raw === null || raw === undefined
                             ? "—"
-                            : String(row[column])}
-                        </td>
-                      ))}
+                            : String(raw);
+
+                        if (isStatusColumn(column) && text !== "—") {
+                          const variant = statusVariantForValue(text);
+
+                          return (
+                            <td key={column}>
+                              {variant ? (
+                                <StatusChip label={text} variant={variant} />
+                              ) : (
+                                text
+                              )}
+                            </td>
+                          );
+                        }
+
+                        return (
+                          <td
+                            key={column}
+                            title={text}
+                            data-mono={/id|reference|date|amount|price/i.test(
+                              column,
+                            )}
+                          >
+                            {text}
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>
               </table>
             ) : (
-              <p className="p-6 text-[12px] text-[#96a198]">No rows found.</p>
+              <p className="db-explorer-empty">No rows match your filters.</p>
             )}
           </div>
 
           {result && result.total_pages > 1 && (
-            <div className="flex items-center justify-between gap-3 border-t border-[#edf1ed] px-4 py-3">
+            <footer className="db-explorer-pagination">
               <button
                 type="button"
-                disabled={page <= 1 || loading}
+                disabled={page <= 1 || refreshing}
                 onClick={() => setPage((current) => Math.max(1, current - 1))}
-                className="inline-flex items-center gap-1 rounded-md border border-[#dce5de] px-3 py-1.5 text-[11px] font-medium disabled:opacity-40"
+                className="db-explorer-page-btn"
               >
-                <ChevronLeft size={14} aria-hidden="true" />
+                <ChevronLeft size={14} aria-hidden />
                 Previous
               </button>
-              <span className="text-[11px] tabular-nums text-[#74837a]">
+              <span className="db-explorer-page-label">
                 Page {result.page} of {result.total_pages}
               </span>
               <button
                 type="button"
-                disabled={page >= result.total_pages || loading}
+                disabled={page >= result.total_pages || refreshing}
                 onClick={() =>
                   setPage((current) =>
                     Math.min(result.total_pages, current + 1),
                   )
                 }
-                className="inline-flex items-center gap-1 rounded-md border border-[#dce5de] px-3 py-1.5 text-[11px] font-medium disabled:opacity-40"
+                className="db-explorer-page-btn"
               >
                 Next
-                <ChevronRight size={14} aria-hidden="true" />
+                <ChevronRight size={14} aria-hidden />
               </button>
-            </div>
+            </footer>
           )}
         </div>
       </div>

@@ -5,6 +5,8 @@ from __future__ import annotations
 
 HIGH_USAGE_ATTENTION_PERCENTAGE = 85.0
 
+PLAN_RENEWAL_ALERT_DAYS = 7
+
 
 ATTENTION_BILL_STATUSES = frozenset(
     {

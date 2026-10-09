@@ -8,6 +8,7 @@ import type {
   SummaryPresentation,
   TablePresentation,
 } from "../types/chat";
+import { PlanRecommendationCard } from "./PlanRecommendationCard";
 import { parseUsageFromKeyValue } from "../utils/parseUsageMeter";
 
 import {
@@ -402,6 +403,11 @@ export function StructuredPresentation({
           presentation={presentation}
           onEntitySelect={onEntitySelect}
         />
+      );
+
+    case "plan_recommendation":
+      return (
+        <PlanRecommendationCard presentation={presentation} />
       );
 
     case "list":

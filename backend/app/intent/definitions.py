@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import FrozenSet
 
+from app.intent.retired import RETIRED_INTENTS
 from app.models.domain import Intent
 
 
@@ -49,7 +50,7 @@ PLAN_TYPE = (
 )
 
 
-INTENT_DEFINITIONS = (
+_ALL_INTENT_DEFINITIONS = (
     # Account / plan
     _definition(
         Intent.GET_CURRENT_PLAN,
@@ -505,6 +506,10 @@ INTENT_DEFINITIONS = (
     _definition(
         Intent.GET_DEVICE_INFORMATION,
         "get_device_information",
+        optional=(
+            "device_type",
+            "device_status",
+        ),
     ),
     _definition(
         Intent.GET_SPECIFIC_DEVICE,
@@ -608,6 +613,33 @@ INTENT_DEFINITIONS = (
         ),
     ),
     _definition(
+        Intent.GET_BILL_ANOMALY_DETECTION,
+        "detect_bill_anomaly",
+        description=(
+            "Explain why the current bill is higher than the "
+            "previous bill, with percent change and main charge "
+            "drivers (roaming, usage, etc.)."
+        ),
+        optional=(
+            "current_bill_id",
+            "previous_bill_id",
+            "month",
+            "year",
+            "comparison_month",
+            "comparison_year",
+        ),
+    ),
+    _definition(
+        Intent.GET_PLAN_RECOMMENDATION,
+        "recommend_plan_for_customer",
+        description=(
+            "Recommend a better-fit mobile plan from the catalog "
+            "based on recent usage vs allowance and estimated "
+            "monthly savings."
+        ),
+        optional=PLAN_TYPE,
+    ),
+    _definition(
         Intent.GET_CUSTOMER_360,
         "get_customer_360",
         description=(
@@ -620,4 +652,10 @@ INTENT_DEFINITIONS = (
         Intent.UNSUPPORTED,
         "",
     ),
+)
+
+INTENT_DEFINITIONS = tuple(
+    definition
+    for definition in _ALL_INTENT_DEFINITIONS
+    if definition.intent not in RETIRED_INTENTS
 )

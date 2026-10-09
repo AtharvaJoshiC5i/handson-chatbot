@@ -38,13 +38,20 @@ def get_payment_profile_status(
         )
 
     if profile is None:
-        return not_found_result(
+        return verified_result(
+            {
+                "result_type": "PAYMENT_PROFILE",
+                "autopay_enabled": False,
+                "default_payment_method": None,
+                "payment_method_label": None,
+                "has_saved_profile": False,
+            },
             source=source_for_table(
                 "customer_payment_profiles"
             ),
             message=(
-                "No saved payment method or autopay setup "
-                "is on file for this account."
+                "Autopay is not enabled and no payment method "
+                "is saved on file for this account."
             ),
         )
 
@@ -60,6 +67,7 @@ def get_payment_profile_status(
             "payment_method_label": profile[
                 "payment_method_label"
             ],
+            "has_saved_profile": True,
         },
         source=source_for_table(
             "customer_payment_profiles"

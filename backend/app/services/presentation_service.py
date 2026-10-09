@@ -15,6 +15,8 @@ from app.models.api import (
     KeyValuePresentation,
     ListItem,
     ListPresentation,
+    PlanRecommendationPlan,
+    PlanRecommendationPresentation,
     SummaryPresentation,
     SummarySection,
     TableColumn,
@@ -81,6 +83,108 @@ def _label(
         .replace("_", " ")
         .title()
     )
+
+
+def _payment_method_label(
+    value: Any,
+) -> str:
+    if value is None:
+        return "—"
+
+    key = str(value).upper()
+    labels = {
+        "UPI": "UPI",
+        "CREDIT_CARD": "Credit card",
+        "DEBIT_CARD": "Debit card",
+        "NET_BANKING": "Net banking",
+    }
+    return labels.get(
+        key,
+        _label(value),
+    )
+
+
+def _bill_payment_paid_secondary(
+    payment: dict[str, Any],
+) -> str:
+    successful_count = int(
+        payment.get("successful_attempt_count") or 0
+    )
+    failed_count = int(
+        payment.get("failed_attempt_count") or 0
+    )
+
+    if successful_count > 0:
+        noun = (
+            "attempt"
+            if successful_count == 1
+            else "attempts"
+        )
+        return f"{successful_count} successful {noun}"
+
+    if failed_count > 0:
+        noun = (
+            "attempt"
+            if failed_count == 1
+            else "attempts"
+        )
+        return f"{failed_count} failed {noun} (not settled)"
+
+    return "No payment settled yet"
+
+
+def _bill_payment_outstanding_secondary(
+    payment: dict[str, Any],
+    bill: dict[str, Any],
+) -> str:
+    outstanding = float(
+        payment.get("outstanding_amount") or 0
+    )
+    pending = float(
+        payment.get("pending_amount") or 0
+    )
+    failed_count = int(
+        payment.get("failed_attempt_count") or 0
+    )
+
+    if outstanding <= 0:
+        if pending > 0:
+            return (
+                f"{_money(pending)} awaiting bank clearance"
+            )
+        return "Nothing due on this bill"
+
+    parts: list[str] = []
+
+    if pending > 0:
+        parts.append(
+            f"{_money(pending)} awaiting clearance"
+        )
+
+    if failed_count > 0:
+        noun = (
+            "attempt"
+            if failed_count == 1
+            else "attempts"
+        )
+        parts.append(f"{failed_count} failed {noun}")
+
+    if parts:
+        return " · ".join(parts)
+
+    due_date = bill.get("due_date")
+    status = str(bill.get("status", "")).upper()
+    if due_date and status in {
+        "UNPAID",
+        "OVERDUE",
+        "PARTIALLY_PAID",
+    }:
+        return f"Due by {due_date}"
+
+    if status in {"UNPAID", "OVERDUE"}:
+        return "Unpaid balance"
+
+    return "Remaining on this bill"
 
 
 def _split_datetime_to_date_time(
@@ -242,6 +346,9 @@ class PresentationService:
             "PLAN_DETAILS": (
                 self._plan_details
             ),
+            "PLAN_COMPARISON": (
+                self._plan_comparison
+            ),
             "USAGE_RECORD_LIST": (
                 self._usage_record_list
             ),
@@ -250,6 +357,12 @@ class PresentationService:
             ),
             "TICKET_UPDATE_LIST": (
                 self._ticket_update_list
+            ),
+            "BILL_ANOMALY_DETECTION": (
+                self._bill_anomaly
+            ),
+            "PLAN_RECOMMENDATION": (
+                self._plan_recommendation
             ),
         }
 
@@ -453,24 +566,25 @@ class PresentationService:
             "",
         )
 
+        usage_label = _label(data.get("usage_type"))
         return ComparisonPresentation(
-            title="Usage comparison",
+            title=f"{usage_label} usage comparison",
             columns=[
-                ComparisonColumn(
-                    key="current",
-                    label=str(
-                        data.get(
-                            "period_1",
-                            "Current",
-                        )
-                    ),
-                ),
                 ComparisonColumn(
                     key="previous",
                     label=str(
                         data.get(
                             "period_2",
                             "Previous",
+                        )
+                    ),
+                ),
+                ComparisonColumn(
+                    key="current",
+                    label=str(
+                        data.get(
+                            "period_1",
+                            "Current",
                         )
                     ),
                 ),
@@ -730,26 +844,33 @@ class PresentationService:
             {},
         )
 
+        previous_period = str(
+            previous.get("period") or "",
+        ).strip()
+        current_period = str(
+            current.get("period") or "",
+        ).strip()
+        previous_label = (
+            f"Previous bill ({previous_period})"
+            if previous_period
+            else "Previous bill"
+        )
+        current_label = (
+            f"Current bill ({current_period})"
+            if current_period
+            else "Current bill"
+        )
+
         return ComparisonPresentation(
             title="Bill comparison",
             columns=[
                 ComparisonColumn(
-                    key="current",
-                    label=str(
-                        current.get(
-                            "period",
-                            "Current",
-                        )
-                    ),
+                    key="previous",
+                    label=previous_label,
                 ),
                 ComparisonColumn(
-                    key="previous",
-                    label=str(
-                        previous.get(
-                            "period",
-                            "Previous",
-                        )
-                    ),
+                    key="current",
+                    label=current_label,
                 ),
             ],
             rows=[
@@ -873,8 +994,12 @@ class PresentationService:
                     "payment_date",
                 )
             )
+            bill_period = payment.get("bill_period")
             rows.append(
                 {
+                    "bill_period": str(
+                        bill_period or "—",
+                    ),
                     "date": date_display,
                     "time": time_display,
                     "amount": _money(
@@ -882,7 +1007,7 @@ class PresentationService:
                             "amount"
                         )
                     ),
-                    "method": _label(
+                    "method": _payment_method_label(
                         payment.get(
                             "payment_method"
                         )
@@ -899,8 +1024,12 @@ class PresentationService:
             title="Payment history",
             columns=[
                 TableColumn(
+                    key="bill_period",
+                    label="Bill period",
+                ),
+                TableColumn(
                     key="date",
-                    label="Date",
+                    label="Paid on",
                 ),
                 TableColumn(
                     key="time",
@@ -1271,8 +1400,8 @@ class PresentationService:
                             0,
                         )
                     ),
-                    secondary=(
-                        f"{_number(payment.get('successful_attempt_count', 0))} successful attempts"
+                    secondary=_bill_payment_paid_secondary(
+                        payment,
                     ),
                 ),
                 SummarySection(
@@ -1283,8 +1412,9 @@ class PresentationService:
                             0,
                         )
                     ),
-                    secondary=(
-                        f"{_money(payment.get('pending_amount', 0))} pending"
+                    secondary=_bill_payment_outstanding_secondary(
+                        payment,
+                        bill,
                     ),
                 ),
             ],
@@ -1566,6 +1696,149 @@ class PresentationService:
         )
 
     @staticmethod
+    def _bill_anomaly(
+        data: dict[str, Any],
+    ) -> ChatPresentation:
+        current = data.get("current_bill") or {}
+        previous = data.get("comparison_bill") or {}
+        scope = data.get("comparison_scope") or ""
+        previous_period = str(previous.get("period") or "").strip()
+        current_period = str(current.get("period") or "").strip()
+        previous_label = (
+            f"Previous bill ({previous_period})"
+            if previous_period
+            else "Previous bill"
+        )
+        current_label = (
+            f"Current bill ({current_period})"
+            if current_period
+            else "Current bill"
+        )
+
+        items = [
+            KeyValueItem(
+                label="Compared",
+                value=scope
+                or (
+                    f"{current.get('period', '')} vs "
+                    f"{previous.get('period', '')}"
+                ),
+            ),
+            KeyValueItem(
+                label=previous_label,
+                value=_money(previous.get("amount")),
+            ),
+            KeyValueItem(
+                label=current_label,
+                value=_money(current.get("amount")),
+            ),
+            KeyValueItem(
+                label="Net increase",
+                value=_money(data.get("total_difference")),
+            ),
+        ]
+        pct = data.get("percent_increase")
+        if pct is not None:
+            items.append(
+                KeyValueItem(
+                    label="Percent increase",
+                    value=f"{pct:g}%",
+                )
+            )
+        return KeyValuePresentation(
+            title="Bill anomaly check",
+            items=items,
+        )
+
+    @staticmethod
+    def _plan_recommendation(
+        data: dict[str, Any],
+    ) -> ChatPresentation:
+        current = data.get("current_plan") or {}
+        recommended = data.get("recommended_plan") or {}
+        status = str(
+            data.get("recommendation_status", "")
+        )
+        usage_fit = data.get("usage_fit") or {}
+        reasons = list(
+            data.get("recommendation_reasons") or []
+        )
+
+        title = "Plan recommendation"
+        if status == "KEEP_CURRENT":
+            title = "Your plan looks like a good fit"
+
+        current_limit = (
+            usage_fit.get("current_data_allowance_gb")
+            or current.get("data_limit_gb")
+        )
+        avg = (
+            usage_fit.get("average_monthly_data_gb")
+            or data.get("average_monthly_data_gb")
+        )
+        utilization = usage_fit.get("utilization_percent")
+
+        current_price = current.get("monthly_price")
+        recommended_plan = None
+        if recommended.get("plan_name") and status != "KEEP_CURRENT":
+            recommended_plan = PlanRecommendationPlan(
+                plan_name=str(recommended["plan_name"]),
+                monthly_price=(
+                    float(recommended["monthly_price"])
+                    if recommended.get("monthly_price")
+                    is not None
+                    else None
+                ),
+                data_limit_gb=(
+                    float(recommended["data_limit_gb"])
+                    if recommended.get("data_limit_gb")
+                    is not None
+                    else None
+                ),
+            )
+
+        savings = data.get("estimated_monthly_savings")
+        savings_value = None
+        if (
+            status != "KEEP_CURRENT"
+            and savings is not None
+            and float(savings) > 0
+        ):
+            savings_value = float(savings)
+
+        return PlanRecommendationPresentation(
+            title=title,
+            recommendation_status=status,
+            current=PlanRecommendationPlan(
+                plan_name=str(
+                    current.get("plan_name", "Current plan")
+                ),
+                monthly_price=(
+                    float(current_price)
+                    if current_price is not None
+                    else None
+                ),
+                data_limit_gb=(
+                    float(current_limit)
+                    if current_limit is not None
+                    else None
+                ),
+            ),
+            recommended=recommended_plan,
+            average_monthly_data_gb=(
+                float(avg) if avg is not None else None
+            ),
+            months_sampled=data.get("months_sampled"),
+            utilization_percent=(
+                float(utilization)
+                if utilization is not None
+                else None
+            ),
+            estimated_monthly_savings=savings_value,
+            reasons=reasons,
+        )
+
+    @staticmethod
     def _account_status(
         data: dict[str, Any],
     ) -> ChatPresentation:
@@ -1636,6 +1909,100 @@ class PresentationService:
                 KeyValueItem(
                     label="Renews",
                     value=str(data.get("renewal_date", "")),
+                ),
+            ],
+        )
+
+    @staticmethod
+    def _plan_data_allowance(plan: dict[str, Any]) -> str:
+        if plan.get("is_data_unlimited"):
+            return "Unlimited"
+        limit = plan.get("data_limit_gb")
+        if limit is None:
+            return "—"
+        return f"{_number(limit)} GB"
+
+    @staticmethod
+    def _plan_comparison(
+        data: dict[str, Any],
+    ) -> ChatPresentation:
+        left = data.get("current") or {}
+        right = data.get("previous") or {}
+
+        def column_label(plan: dict[str, Any]) -> str:
+            name = str(plan.get("plan_name") or "Plan")
+            plan_id = str(plan.get("plan_id") or "")
+            if plan_id:
+                return f"{name} ({plan_id})"
+            return name
+
+        return ComparisonPresentation(
+            title="Plan comparison",
+            columns=[
+                ComparisonColumn(
+                    key="left",
+                    label=column_label(left),
+                ),
+                ComparisonColumn(
+                    key="right",
+                    label=column_label(right),
+                ),
+            ],
+            rows=[
+                ComparisonRow(
+                    label="Monthly price",
+                    values={
+                        "left": _money(
+                            left.get("monthly_price"),
+                        ),
+                        "right": _money(
+                            right.get("monthly_price"),
+                        ),
+                    },
+                ),
+                ComparisonRow(
+                    label="Data",
+                    values={
+                        "left": (
+                            PresentationService._plan_data_allowance(
+                                left,
+                            )
+                        ),
+                        "right": (
+                            PresentationService._plan_data_allowance(
+                                right,
+                            )
+                        ),
+                    },
+                ),
+                ComparisonRow(
+                    label="Voice minutes",
+                    values={
+                        "left": _number(
+                            left.get("voice_limit_minutes"),
+                        ),
+                        "right": _number(
+                            right.get("voice_limit_minutes"),
+                        ),
+                    },
+                ),
+                ComparisonRow(
+                    label="SMS",
+                    values={
+                        "left": _number(
+                            left.get("sms_limit"),
+                        ),
+                        "right": _number(
+                            right.get("sms_limit"),
+                        ),
+                    },
+                ),
+                ComparisonRow(
+                    label="Line type",
+                    values={
+                        "left": _label(left.get("plan_type")),
+                        "right": _label(right.get("plan_type")),
+                    },
                 ),
             ],
         )
@@ -2077,7 +2444,7 @@ class PresentationService:
             )
         )
         attention_secondary = (
-            " ".join(
+            "\n".join(
                 item["message"]
                 for item in attention_items
             )
@@ -2091,6 +2458,16 @@ class PresentationService:
                 primary=attention_primary,
                 secondary=attention_secondary,
             )
+        )
+
+        customer_360_record_keys = (
+            "customer",
+            "subscriptions",
+            "plans",
+            "usage",
+            "payments",
+            "support_tickets",
+            "devices",
         )
 
         table_columns = {
@@ -2182,7 +2559,8 @@ class PresentationService:
             {},
         )
 
-        for key, columns in table_columns.items():
+        for key in customer_360_record_keys:
+            columns = table_columns[key]
             rows = records.get(
                 key,
                 [],
@@ -2216,7 +2594,7 @@ class PresentationService:
 
         return Customer360Presentation(
             type="customer_360",
-            title="Customer 360",
+            title="Your account at a glance",
             sections=sections,
             tables=tables,
         )

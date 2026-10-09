@@ -172,7 +172,7 @@ def test_deterministic_evaluation_runs_end_to_end():
         mode="deterministic"
     )
 
-    assert len(run.results) == 75
+    assert len(run.results) == 71
 
     assert run.metrics.intent_accuracy == 1.0
     assert run.metrics.parameter_accuracy == 1.0

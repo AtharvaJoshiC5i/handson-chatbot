@@ -7,8 +7,9 @@ from datetime import date
 import sqlite3
 
 from app.database.queries.bills import (
+    get_bill_by_id_for_customer,
     get_bill_for_month,
-    get_latest_bill,
+    get_current_statement_bill,
 )
 from app.database.queries.payments import (
     get_latest_payment,
@@ -45,10 +46,32 @@ def _money(
     )
 
 
+def _bill_period_label(
+    billing_period_start: str | None,
+) -> str | None:
+    if not billing_period_start:
+        return None
+
+    start = date.fromisoformat(
+        billing_period_start,
+    )
+    return (
+        f"{month_name[start.month]} "
+        f"{start.year}"
+    )
+
+
 def _payment_dict(
     payment,
 ) -> dict:
-    return {
+    keys = payment.keys()
+    bill_period = None
+    if "billing_period_start" in keys:
+        bill_period = _bill_period_label(
+            payment["billing_period_start"],
+        )
+
+    payload = {
         "payment_id": payment[
             "payment_id"
         ],
@@ -73,6 +96,66 @@ def _payment_dict(
         "failure_reason": payment[
             "failure_reason"
         ],
+    }
+
+    if bill_period is not None:
+        payload["bill_period"] = bill_period
+
+    if "bill_amount" in keys and payment["bill_amount"] is not None:
+        payload["bill_amount"] = _money(
+            payment["bill_amount"]
+        )
+
+    return payload
+
+
+def _bill_settlement_for_payment(
+    db: sqlite3.Connection,
+    customer_id: str,
+    payment,
+) -> dict[str, float | bool | str] | None:
+    bill_id = payment["bill_id"]
+    if not bill_id:
+        return None
+
+    bill = get_bill_by_id_for_customer(
+        db,
+        customer_id,
+        bill_id,
+    )
+    if bill is None:
+        return None
+
+    attempts = get_payments_for_bill(
+        db,
+        customer_id,
+        bill_id,
+    )
+    successful_paid_amount = _money(
+        sum(
+            float(row["amount"])
+            for row in attempts
+            if row["status"]
+            == PaymentStatus.SUCCESS.value
+        )
+    )
+    bill_amount = _money(bill["amount"])
+    outstanding_amount = _money(
+        max(
+            bill_amount - successful_paid_amount,
+            0.0,
+        )
+    )
+    is_fully_paid = (
+        successful_paid_amount + 0.01 >= bill_amount
+    )
+
+    return {
+        "bill": _bill_dict(bill),
+        "bill_amount": bill_amount,
+        "successful_paid_amount": successful_paid_amount,
+        "outstanding_amount": outstanding_amount,
+        "is_fully_paid": is_fully_paid,
     }
 
 
@@ -241,7 +324,7 @@ def _resolve_bill(
     year: int | None = None,
 ):
     if month is None:
-        return get_latest_bill(
+        return get_current_statement_bill(
             db,
             customer.customer_id,
         )
@@ -287,16 +370,21 @@ def get_payment_status(
             ),
         )
 
+    payload: dict = {
+        "result_type": "PAYMENT_LATEST",
+        "payment": _payment_dict(payment),
+    }
+    settlement = _bill_settlement_for_payment(
+        db,
+        customer.customer_id,
+        payment,
+    )
+    if settlement is not None:
+        payload.update(settlement)
+
     return verified_result(
-        {
-            "result_type": "PAYMENT_LATEST",
-            "payment": _payment_dict(
-                payment
-            ),
-        },
-        source=source_for_table(
-            "payments"
-        ),
+        payload,
+        source=source_for_table("payments"),
     )
 
 
@@ -318,6 +406,9 @@ def get_payment_history_for_customer(
             month_count=month_count,
         )
     )
+
+    if end_date is None:
+        end_date = date.today().isoformat()
 
     try:
         payments = get_payment_history(
@@ -673,6 +764,13 @@ def reconcile_bill_payment(
         )
     )
 
+    failed_attempt_amount = _money(
+        sum(
+            float(payment["amount"])
+            for payment in failed
+        )
+    )
+
     bill_amount = _money(
         bill["amount"]
     )
@@ -751,6 +849,9 @@ def reconcile_bill_payment(
         ),
         "pending_amount": (
             pending_amount
+        ),
+        "failed_attempt_amount": (
+            failed_attempt_amount
         ),
         "outstanding_amount": (
             outstanding_amount

@@ -65,10 +65,20 @@ class Settings(BaseSettings):
     )
 
     response_max_tokens_full: int = Field(
-        default=384,
+        default=640,
         alias="RESPONSE_MAX_TOKENS_FULL",
         ge=64,
         le=768,
+    )
+
+    conversation_turn_window: int = Field(
+        default=10,
+        alias="CONVERSATION_TURN_WINDOW",
+        ge=1,
+        le=50,
+        description=(
+            "Max prior user turns kept per conversation_id for intent context"
+        ),
     )
 
 

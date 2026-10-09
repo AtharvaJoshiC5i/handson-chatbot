@@ -59,6 +59,10 @@ from app.handlers.explorer_parity import (
     list_ticket_updates,
     list_usage_records_for_customer,
 )
+from app.handlers.smart_features import (
+    detect_bill_anomaly,
+    recommend_plan_for_customer,
+)
 from app.handlers.subscriptions_catalog import (
     get_list_subscriptions,
     get_plan_catalog,
@@ -103,6 +107,10 @@ from app.intent.parameters import (
     validate_required_parameters,
 )
 from app.intent.registry import get_intent_definition
+from app.intent.retired import (
+    is_retired_intent,
+    retired_intent_message,
+)
 from app.models.domain import (
     CustomerContext,
     Intent,
@@ -228,6 +236,10 @@ HANDLERS = {
     "get_account_attention_summary": (
         get_account_attention_summary
     ),
+    "detect_bill_anomaly": detect_bill_anomaly,
+    "recommend_plan_for_customer": (
+        recommend_plan_for_customer
+    ),
     # Phase 6
     "get_customer_360": get_customer_360,
 }
@@ -244,6 +256,11 @@ class IntentRouter:
         intent_response: LLMIntentResponse,
     ) -> TruthResult[Any]:
         intent = intent_response.intent
+
+        if is_retired_intent(intent):
+            return unsupported_result(
+                message=retired_intent_message(),
+            )
 
         if intent == Intent.UNSUPPORTED:
             return unsupported_result(

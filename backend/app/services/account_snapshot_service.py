@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 import sqlite3
 
 from app.business.dates import resolve_usage_period
-from app.database.queries.bills import get_latest_bill
+from app.database.queries.bills import get_current_statement_bill
 from app.database.queries.credits import get_available_credit_total
 from app.database.queries.customers import get_customer
 from app.database.queries.payment_profiles import get_payment_profile
@@ -108,7 +108,10 @@ def build_account_snapshot(
         except ValueError:
             pass
 
-    bill_row = get_latest_bill(db, customer_id)
+    bill_row = get_current_statement_bill(
+        db,
+        customer_id,
+    )
     bill = None
     if bill_row is not None:
         bill = {
@@ -122,7 +125,7 @@ def build_account_snapshot(
     bills_by_line: list[dict] = []
     if len(active_subs) > 1:
         for sub in active_subs:
-            line_bill = get_latest_bill(
+            line_bill = get_current_statement_bill(
                 db,
                 customer_id,
                 plan_type=sub["plan_type"],

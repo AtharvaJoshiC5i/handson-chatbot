@@ -6,18 +6,16 @@ from pathlib import Path
 import sqlite3
 
 SCHEMA_PATH = Path(__file__).resolve().parent / "schema.sql"
+# Demo "today" for billing: only seed closed statement cycles.
+DEMO_REFERENCE_DATE = date(2026, 10, 8)
 MONTHS = (
     [(2025, month) for month in range(10, 13)]
     + [(2026, month) for month in range(1, 11)]
 )
 
-# Demo customers with more than one subscription (mobile + fiber).
-MULTI_SUBSCRIPTION_CUSTOMERS = {
-    "CUST003": (
-        "PLAN003",
-        "2023-12-01",
-    ),
-}
+# Demo customers with more than one subscription (e.g. mobile + fiber).
+# CUST003 is fiber-only (router at home); no second mobile line.
+MULTI_SUBSCRIPTION_CUSTOMERS: dict[str, tuple[str, str]] = {}
 
 # Intentional manager-demo fixtures:
 # CUST002: roaming bill increase + failed payment + billing ticket.
@@ -1224,12 +1222,12 @@ def _billing(
             for month_index, (year, month) in enumerate(
                 months,
             ):
-                if (
-                    customer_index in (2, 5, 6)
-                    and (year, month) == (2026, 10)
-                    and plan[7] == "MOBILE"
-                    and subscription_index == 0
-                ):
+                period_end_date = date(
+                    year,
+                    month,
+                    _last(year, month),
+                )
+                if period_end_date > DEMO_REFERENCE_DATE:
                     continue
 
                 if (

@@ -17,9 +17,11 @@ from openai import (
 from app.config.settings import Settings
 from app.llm.prompts import (
     SYSTEM_PROMPT,
+    build_customer_360_response_system_prompt,
     build_response_system_prompt,
 )
 from app.models.domain import (
+    BillStatus,
     DeviceExtremeType,
     DeviceStatus,
     DeviceType,
@@ -39,6 +41,7 @@ from app.models.llm import (
     IntentParameters,
     LLMIntentResponse,
 )
+from app.llm.demo_routing import classify_demo_question
 from app.utils.errors import LLMError
 
 
@@ -79,7 +82,7 @@ def _extract_ticket_id(
     user_message: str,
 ) -> str | None:
     match = re.search(
-        r"\bTICKET[A-Z0-9_-]*\d+[A-Z0-9_-]*\b",
+        r"\b(?:TICKET|TKT)[A-Z0-9_-]*\d+[A-Z0-9_-]*\b",
         user_message,
         flags=re.IGNORECASE,
     )
@@ -345,14 +348,9 @@ def _usage_clarification(
                 "Which usage history would you like: "
                 "data, voice minutes, or SMS?"
             )
-    elif mode == "trend":
+    elif mode in {"trend", "comparison", "average", "extreme"}:
         clarification = (
-            f"Which usage trend should I check{period or ''}: "
-            "data, voice minutes, or SMS?"
-        )
-    elif mode == "comparison":
-        clarification = (
-            "Which usage should I compare: "
+            f"Which usage history should I show{period or ''}: "
             "data, voice minutes, or SMS?"
         )
     elif mode == "remaining":
@@ -403,6 +401,92 @@ def _usage_clarification(
 # ============================================================
 
 
+_CUSTOMER_360_PHRASES = (
+    "summary of my account",
+    "summary of my nexatel account",
+    "my account summary",
+    "account overview",
+    "customer 360",
+    "customer360",
+    "what's happening with my account",
+    "what is happening with my account",
+    "summarize my nexatel account",
+    "summarize my account",
+    "how am i doing overall",
+    "entire account information",
+    "all my account information",
+    "full account information",
+    "complete account information",
+    "all information about my account",
+    "entire information about my account",
+    "everything about my account",
+    "everything on my account",
+    "tell me everything about my account",
+    "show me everything about my account",
+    "my full profile",
+    "my complete profile",
+    "all my details",
+    "all of my details",
+    "full customer profile",
+    "comprehensive account view",
+    "comprehensive account overview",
+    "pull up my full account",
+    "show my whole account",
+    "what do you know about my account",
+    "what do you know about me",
+    "give me all my account details",
+    "show all my account details",
+)
+
+_CUSTOMER_360_PATTERNS = (
+    re.compile(
+        r"\b(entire|full|complete|all)\s+"
+        r"(account\s+)?(profile|information|details|records?|picture|snapshot)\b",
+    ),
+    re.compile(
+        r"\b(show|give|tell|pull\s+up|fetch|get)\s+(me\s+)?"
+        r"(my\s+)?(entire|full|complete|all)\s+"
+        r"(account|profile|information|details)\b",
+    ),
+    re.compile(
+        r"\beverything\s+(about|on|regarding)\s+"
+        r"(my\s+)?(account|profile)\b",
+    ),
+    re.compile(
+        r"\b(all|every)\s+(of\s+)?(my\s+)?"
+        r"(account|customer)\s+(details|information|data)\b",
+    ),
+    re.compile(
+        r"\bwhat\s+do\s+you\s+know\s+about\s+(me|my\s+account)\b",
+    ),
+    re.compile(
+        r"\bcomprehensive\s+(view|summary|overview|picture)\b",
+    ),
+    re.compile(
+        r"\bmy\s+whole\s+account\b",
+    ),
+    re.compile(
+        r"\b(entire|full|complete)\s+overview\b",
+    ),
+)
+
+
+def _matches_customer_360_request(text: str) -> bool:
+    """Holistic account snapshot — not single-domain or attention-only asks."""
+
+    if any(phrase in text for phrase in _CUSTOMER_360_PHRASES):
+        return True
+
+    if any(pattern.search(text) for pattern in _CUSTOMER_360_PATTERNS):
+        if "attention" in text or "pay attention" in text:
+            return False
+        if "need to worry" in text:
+            return False
+        return True
+
+    return False
+
+
 def classify_phase5_request(
     user_message: str,
 ) -> LLMIntentResponse | None:
@@ -414,28 +498,36 @@ def classify_phase5_request(
 
     parameters = IntentParameters()
 
-    # --------------------------------------------------------
-    # Customer 360
-    # --------------------------------------------------------
+    if any(
+        phrase in text
+        for phrase in (
+            "right plan",
+            "on the right plan",
+            "recommend a plan",
+            "better plan for me",
+            "should i change my plan",
+            "switch my plan",
+        )
+    ):
+        return LLMIntentResponse(
+            intent=Intent.GET_PLAN_RECOMMENDATION,
+            parameters=parameters,
+        )
 
     if any(
         phrase in text
         for phrase in (
-            "summary of my account",
-            "summary of my nexatel account",
-            "my account summary",
-            "account overview",
-            "customer 360",
-            "customer360",
-            "what's happening with my account",
-            "what is happening with my account",
-            "summarize my nexatel account",
-            "summarize my account",
-            "how am i doing overall",
+            "bill higher",
+            "higher bill",
+            "unusually high",
+            "why is my bill higher",
+            "why is my bill so high",
+            "spike in my bill",
+            "bill spike",
         )
     ):
         return LLMIntentResponse(
-            intent=Intent.GET_CUSTOMER_360,
+            intent=Intent.GET_BILL_ANOMALY_DETECTION,
             parameters=parameters,
         )
 
@@ -460,6 +552,8 @@ def classify_phase5_request(
             "is anything wrong with my account",
             "does anything need my attention",
             "anything need my attention",
+            "what needs my attention",
+            "what do i need to pay attention to",
             "is anything pending",
             "anything pending on my account",
             "anything i need to take care of",
@@ -470,6 +564,12 @@ def classify_phase5_request(
             intent=(
                 Intent.GET_ACCOUNT_ATTENTION_SUMMARY
             ),
+            parameters=parameters,
+        )
+
+    if _matches_customer_360_request(text):
+        return LLMIntentResponse(
+            intent=Intent.GET_CUSTOMER_360,
             parameters=parameters,
         )
 
@@ -486,10 +586,16 @@ def classify_phase5_request(
 
     has_payment = (
         "payment" in text
-        or "paid" in text
+        or (
+            "paid" in text
+            and "unpaid" not in text
+        )
         or "pay " in text
         or "owe" in text
-        or "due" in text
+        or (
+            "due" in text
+            and "overdue" not in text
+        )
     )
 
     has_breakdown = any(
@@ -721,47 +827,20 @@ def _classify_support_request(
         )
 
     if ticket_id is not None:
+        if any(
+            phrase in text
+            for phrase in (
+                "timeline",
+                "full timeline",
+                "ticket updates",
+            )
+        ):
+            return LLMIntentResponse(
+                intent=Intent.GET_SUPPORT_TICKET_UPDATES,
+                parameters=parameters,
+            )
         return LLMIntentResponse(
-            intent=(
-                Intent.GET_SPECIFIC_SUPPORT_TICKET
-            ),
-            parameters=parameters,
-        )
-
-    if any(
-        phrase in text
-        for phrase in (
-            "support summary",
-            "summarize my support",
-            "summarise my support",
-            "summarize my tickets",
-            "summarise my tickets",
-            "what's happening with my support",
-            "what is happening with my support",
-        )
-    ):
-        return LLMIntentResponse(
-            intent=(
-                Intent.GET_SUPPORT_SUMMARY
-            ),
-            parameters=parameters,
-        )
-
-    if any(
-        phrase in text
-        for phrase in (
-            "most common support",
-            "most common issue",
-            "issue do i raise most",
-            "issues do i raise most",
-            "category appears most",
-            "type of issue do i raise most",
-        )
-    ):
-        return LLMIntentResponse(
-            intent=(
-                Intent.GET_SUPPORT_COMMON_CATEGORY
-            ),
+            intent=Intent.GET_SPECIFIC_SUPPORT_TICKET,
             parameters=parameters,
         )
 
@@ -806,6 +885,8 @@ def _classify_support_request(
     elif (
         "open ticket" in text
         or "open tickets" in text
+        or "open case" in text
+        or "open cases" in text
     ):
         parameters.ticket_status = (
             SupportTicketStatus.OPEN
@@ -906,53 +987,18 @@ def _classify_support_request(
             "ticket" in text
             or "complaint" in text
             or "issue" in text
+            or "case" in text
         )
     ):
-        return LLMIntentResponse(
-            intent=(
-                Intent.GET_SUPPORT_TICKET_COUNT
-            ),
-            parameters=parameters,
-        )
-
-    if any(
-        (
-            parameters.ticket_status
-            is not None,
-            parameters.ticket_priority
-            is not None,
-            parameters.ticket_category
-            is not None,
-            bool(
-                parameters.unresolved_only
-            ),
-        )
-    ):
-        if (
-            "newest first" in text
-            or "latest first" in text
-        ):
-            parameters.support_sort_order = (
-                SupportSortOrder.NEWEST
-            )
-
-        elif "oldest first" in text:
-            parameters.support_sort_order = (
-                SupportSortOrder.OLDEST
-            )
-
+        parameters.ticket_status = None
+        parameters.ticket_priority = None
+        parameters.ticket_category = None
+        parameters.unresolved_only = None
         if (
             count is not None
             and "month" not in text
         ):
             parameters.limit = count
-
-        return LLMIntentResponse(
-            intent=(
-                Intent.FILTER_SUPPORT_TICKETS
-            ),
-            parameters=parameters,
-        )
 
     if (
         "history" in text
@@ -960,6 +1006,7 @@ def _classify_support_request(
         or "support requests" in text
         or "tickets" in text
         or "complaints" in text
+        or "cases" in text
     ):
         if (
             count is not None
@@ -991,212 +1038,77 @@ def _classify_device_request(
         for term in (
             "device",
             "devices",
-            "phone",
-            "phones",
-            "smartphone",
-            "smartphones",
-            "handset",
-            "handsets",
             "router",
             "routers",
             "equipment",
             "modem",
+            "modems",
             "tablet",
+            "tablets",
+            "handset",
+            "handsets",
+            "registered device",
+            "registered devices",
         )
-    )
+    ) or re.search(
+        r"\bdev\d+\b",
+        text,
+        flags=re.IGNORECASE,
+    ) is not None
 
     if not device_language:
         return None
 
     parameters = IntentParameters()
 
-    device_id = _extract_device_id(
-        user_message
-    )
-
-    if device_id is not None:
-        parameters.device_id = device_id
-
-    if any(
-        phrase in text
-        for phrase in (
-            "not working",
-            "isn't working",
-            "is not working",
-            "router slow",
-            "phone slow",
-            "device slow",
-            "wrong with my device",
-            "wrong with my phone",
-            "wrong with my router",
-            "phone broken",
-            "device broken",
-            "router broken",
-        )
-    ):
-        return LLMIntentResponse(
-            intent=(
-                Intent.GET_DEVICE_DIAGNOSTIC_LIMITATION
-            ),
-            parameters=parameters,
-        )
-
-    if device_id is not None:
-        return LLMIntentResponse(
-            intent=(
-                Intent.GET_SPECIFIC_DEVICE
-            ),
-            parameters=parameters,
-        )
-
-    if any(
-        phrase in text
-        for phrase in (
-            "device summary",
-            "summarize my devices",
-            "summarise my devices",
-        )
-    ):
-        return LLMIntentResponse(
-            intent=(
-                Intent.GET_DEVICE_SUMMARY
-            ),
-            parameters=parameters,
-        )
-
-    if any(
-        phrase in text
-        for phrase in (
-            "newest device",
-            "latest device",
-            "most recently",
-            "purchased most recently",
-        )
-    ):
-        parameters.device_extreme_type = (
-            DeviceExtremeType.NEWEST
-        )
-
-        return LLMIntentResponse(
-            intent=(
-                Intent.GET_DEVICE_EXTREME
-            ),
-            parameters=parameters,
-        )
-
-    if any(
-        phrase in text
-        for phrase in (
-            "oldest device",
-            "had the longest",
-            "first device",
-        )
-    ):
-        parameters.device_extreme_type = (
-            DeviceExtremeType.OLDEST
-        )
-
-        return LLMIntentResponse(
-            intent=(
-                Intent.GET_DEVICE_EXTREME
-            ),
-            parameters=parameters,
-        )
-
-    if "inactive" in text:
-        parameters.device_status = (
-            DeviceStatus.INACTIVE
-        )
-
-    elif (
-        "replaced" in text
-        or "old devices" in text
-    ):
-        parameters.device_status = (
-            DeviceStatus.REPLACED
-        )
-
-    elif "lost" in text:
-        parameters.device_status = (
-            DeviceStatus.LOST
-        )
-
-    elif (
-        "active device" in text
-        or "active devices" in text
-        or "currently active" in text
-        or "current device" in text
-        or "current devices" in text
-    ):
-        parameters.device_status = (
-            DeviceStatus.ACTIVE
-        )
-
-    if any(
+    if "router" in text:
+        parameters.device_type = DeviceType.ROUTER
+    elif "modem" in text:
+        parameters.device_type = DeviceType.MODEM
+    elif "tablet" in text:
+        parameters.device_type = DeviceType.TABLET
+    elif any(
         term in text
         for term in (
-            "smartphone",
-            "smartphones",
             "phone",
             "phones",
+            "smartphone",
             "handset",
             "handsets",
         )
     ):
-        parameters.device_type = (
-            DeviceType.SMARTPHONE
-        )
+        parameters.device_type = DeviceType.SMARTPHONE
 
-    elif (
-        "router" in text
-        or "routers" in text
-    ):
-        parameters.device_type = (
-            DeviceType.ROUTER
+    if any(
+        phrase in text
+        for phrase in (
+            "internet slow",
+            "slow internet",
+            "phone internet slow",
+            "why is my phone internet slow",
+            "network slow on my phone",
+            "diagnose",
+            "diagnostics",
+            "troubleshoot",
         )
-
-    elif (
-        "tablet" in text
-        or "tablets" in text
-    ):
-        parameters.device_type = (
-            DeviceType.TABLET
-        )
-
-    elif (
-        "modem" in text
-        or "modems" in text
-    ):
-        parameters.device_type = (
-            DeviceType.MODEM
-        )
-
-    if (
-        "how many" in text
-        or "device count" in text
     ):
         return LLMIntentResponse(
-            intent=(
-                Intent.GET_DEVICE_COUNT
+            intent=Intent.UNSUPPORTED,
+            clarification=(
+                "I can list devices registered on your account, but "
+                "I can't run network or device diagnostics in this "
+                "chat."
             ),
-            parameters=parameters,
-        )
-
-    if (
-        parameters.device_status
-        is not None
-        or parameters.device_type
-        is not None
-    ):
-        return LLMIntentResponse(
-            intent=Intent.FILTER_DEVICES,
-            parameters=parameters,
+            options=[
+                IntentOption(
+                    label="Show my devices",
+                    message="What devices are on my account?",
+                ),
+            ],
         )
 
     return LLMIntentResponse(
-        intent=(
-            Intent.GET_DEVICE_INFORMATION
-        ),
+        intent=Intent.GET_DEVICE_INFORMATION,
         parameters=parameters,
     )
 
@@ -1364,7 +1276,17 @@ def _classify_usage_request(
     else:
         usage_type = None
 
-    if any(term in text for term in ("compare", "comparison", "versus", " vs ", "more than", "less than")):
+    if any(
+        term in text
+        for term in (
+            "compare",
+            "comparison",
+            "versus",
+            " vs ",
+            "more than",
+            "less than",
+        )
+    ):
         if usage_type is None:
             return _usage_clarification(text, parameters)
         parameters.usage_type = usage_type
@@ -1396,37 +1318,21 @@ def _classify_usage_request(
             parameters=parameters,
         )
 
-    if "average" in text:
-        if usage_type is None:
-            return _usage_clarification(text, parameters)
-        parameters.usage_type = usage_type
-        return LLMIntentResponse(
-            intent=Intent.GET_USAGE_AVERAGE,
-            parameters=parameters,
-        )
-
     if "trend" in text:
         if usage_type is None:
             return _usage_clarification(text, parameters)
         parameters.usage_type = usage_type
+        parameters.month_count = parameters.month_count or 6
         return LLMIntentResponse(
-            intent=Intent.GET_USAGE_TREND,
+            intent=Intent.GET_USAGE_HISTORY,
             parameters=parameters,
         )
 
-    if any(term in text for term in ("highest", "most", "lowest", "least")):
-        if usage_type is None:
-            return _usage_clarification(text, parameters)
-        parameters.usage_type = usage_type
-        parameters.extreme_type = (
-            UsageExtremeType.LOWEST
-            if "lowest" in text or "least" in text
-            else UsageExtremeType.HIGHEST
-        )
-        return LLMIntentResponse(
-            intent=Intent.GET_USAGE_EXTREME,
-            parameters=parameters,
-        )
+    if any(
+        term in text
+        for term in ("average", "highest", "most", "lowest", "least")
+    ):
+        return None
 
     if (
         any(
@@ -1482,6 +1388,126 @@ def _classify_usage_request(
     return _usage_clarification(text, parameters)
 
 
+def _classify_unpaid_bills_request(
+    text: str,
+) -> LLMIntentResponse | None:
+    if "bill" not in text and "bills" not in text:
+        return None
+
+    if not any(
+        phrase in text
+        for phrase in (
+            "unpaid",
+            "not paid",
+            "haven't paid",
+            "have not paid",
+            "overdue bill",
+            "overdue bills",
+            "past due",
+        )
+    ):
+        return None
+
+    if any(
+        phrase in text
+        for phrase in (
+            "current bill and payment",
+            "bill and payment status",
+            "has my bill been paid",
+            "did i pay",
+            "payment status",
+        )
+    ):
+        return None
+
+    parameters = IntentParameters(
+        status_filter=BillStatus.UNPAID,
+    )
+    count = _extract_count(text)
+    if count is not None:
+        parameters.limit = count
+
+    return LLMIntentResponse(
+        intent=Intent.FILTER_BILLS,
+        parameters=parameters,
+    )
+
+
+def _classify_simplified_bill_request(
+    text: str,
+) -> LLMIntentResponse | None:
+    if "bill" not in text and "bills" not in text:
+        return None
+
+    if any(
+        phrase in text
+        for phrase in (
+            "compare my latest bill",
+            "latest bill with the previous",
+            "latest bill to the previous",
+            "current bill with the previous",
+            "this bill with last month",
+            "this bill to last month",
+            "latest bill with the previous one",
+            "latest with the previous one",
+            "compare my latest bill with the previous one",
+        )
+    ):
+        return LLMIntentResponse(
+            intent=Intent.GET_BILL_COMPARISON,
+            parameters=IntentParameters(),
+        )
+
+    if _requests_calendar_month_bill_pair(text):
+        from datetime import date
+
+        from app.business.dates import shift_month
+
+        today = date.today()
+        previous_year, previous_month = shift_month(
+            today.year,
+            today.month,
+            -1,
+        )
+        return LLMIntentResponse(
+            intent=Intent.GET_BILL_COMPARISON,
+            parameters=IntentParameters(
+                month=today.month,
+                year=today.year,
+                comparison_month=previous_month,
+                comparison_year=previous_year,
+            ),
+        )
+
+    if any(
+        phrase in text
+        for phrase in (
+            "why did my bill change",
+            "bill change from last",
+            "bill go up",
+            "bill went up",
+            "bill go down",
+        )
+    ):
+        return LLMIntentResponse(
+            intent=Intent.EXPLAIN_BILL_CHANGE,
+            parameters=IntentParameters(),
+        )
+
+    if "bill trend" in text or (
+        "trend" in text and "bill" in text
+    ):
+        parameters = IntentParameters()
+        count = _extract_count(text)
+        parameters.limit = count or 6
+        return LLMIntentResponse(
+            intent=Intent.GET_BILL_HISTORY,
+            parameters=parameters,
+        )
+
+    return None
+
+
 def _classify_billing_service_request(
     text: str,
 ) -> LLMIntentResponse | None:
@@ -1506,6 +1532,33 @@ def _classify_billing_service_request(
             parameters=parameters,
         )
     return None
+
+
+def _classify_plan_comparison(
+    user_message: str,
+    text: str,
+) -> LLMIntentResponse | None:
+    if "compare" not in text and " versus " not in text and " vs " not in text:
+        return None
+
+    plan_ids = [
+        match.group(0).upper()
+        for match in re.finditer(
+            r"\bPLAN[A-Z0-9_-]*\d+[A-Z0-9_-]*\b",
+            user_message,
+            flags=re.IGNORECASE,
+        )
+    ]
+    if len(plan_ids) < 2:
+        return None
+
+    return LLMIntentResponse(
+        intent=Intent.GET_PLAN_COMPARISON,
+        parameters=IntentParameters(
+            plan_id=plan_ids[0],
+            comparison_plan_id=plan_ids[1],
+        ),
+    )
 
 
 def _classify_subscription_inventory(
@@ -1563,99 +1616,144 @@ def _classify_explorer_records(
             parameters=parameters,
         )
 
-    plan_id_match = re.search(
-        r"\b(PLAN\d+)\b",
-        text,
-        flags=re.IGNORECASE,
-    )
-    if plan_id_match and any(
-        word in text
-        for word in (
-            "detail",
-            "details",
-            "show plan",
-            "what is plan",
-            "tell me about plan",
-        )
-    ):
-        parameters.plan_id = plan_id_match.group(1).upper()
-        return LLMIntentResponse(
-            intent=Intent.GET_PLAN_DETAILS,
-            parameters=parameters,
-        )
-
-    if any(
-        phrase in text
-        for phrase in (
-            "usage record",
-            "usage records",
-            "daily usage",
-            "raw usage",
-            "list usage rows",
-        )
-    ):
-        limit_match = re.search(
-            r"\b(?:last|show|list)\s+(\d+)\s+(?:usage|records)",
-            text,
-        )
-        if limit_match:
-            parameters.limit = int(limit_match.group(1))
-        sub_match = re.search(
-            r"\b(SUB\d+)\b",
-            text,
-            flags=re.IGNORECASE,
-        )
-        if sub_match:
-            parameters.subscription_id = sub_match.group(1).upper()
-        return LLMIntentResponse(
-            intent=Intent.LIST_USAGE_RECORDS,
-            parameters=parameters,
-        )
-
-    if any(
-        phrase in text
-        for phrase in (
-            "bill line item",
-            "bill line items",
-            "bill items",
-            "line items on my bills",
-            "list bill items",
-        )
-    ):
-        bill_match = re.search(
-            r"\b(BILL\d+)\b",
-            text,
-            flags=re.IGNORECASE,
-        )
-        if bill_match:
-            parameters.current_bill_id = bill_match.group(1).upper()
-        return LLMIntentResponse(
-            intent=Intent.LIST_BILL_ITEMS,
-            parameters=parameters,
-        )
-
-    if any(
-        phrase in text
-        for phrase in (
-            "all ticket updates",
-            "ticket update history",
-            "list ticket updates",
-            "support ticket updates",
-        )
-    ) and "latest update" not in text:
-        ticket_match = re.search(
-            r"\b(TKT\d+)\b",
-            text,
-            flags=re.IGNORECASE,
-        )
-        if ticket_match:
-            parameters.ticket_id = ticket_match.group(1).upper()
-        return LLMIntentResponse(
-            intent=Intent.LIST_TICKET_UPDATES,
-            parameters=parameters,
-        )
-
     return None
+
+
+_NAMED_MONTH_PATTERN = re.compile(
+    r"\b("
+    r"january|february|march|april|may|june|july|august|"
+    r"september|october|november|december|"
+    r"jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec"
+    r")\b",
+    flags=re.IGNORECASE,
+)
+
+
+def _message_names_calendar_month(text: str) -> bool:
+    for match in _NAMED_MONTH_PATTERN.finditer(text):
+        token = match.group(1).lower()
+        if token == "may":
+            if re.search(
+                r"\b(?:in|for|during|of|month of)\s+may\b|"
+                r"\bmay\s+(?:data|voice|sms|usage|bill)\b",
+                text,
+            ):
+                return True
+            continue
+        return True
+    return False
+
+
+def _requests_latest_previous_bill_pair(text: str) -> bool:
+    if "bill" not in text:
+        return False
+
+    if any(
+        phrase in text
+        for phrase in (
+            "compare my latest bill",
+            "latest bill with the previous",
+            "latest bill to the previous",
+            "latest bill with the previous one",
+            "latest with the previous",
+            "most recent bill with",
+            "current bill with the previous",
+            "this bill with last month",
+            "this bill to last month",
+        )
+    ):
+        return True
+
+    return (
+        "latest" in text
+        and "previous" in text
+    )
+
+
+def _requests_calendar_month_bill_pair(text: str) -> bool:
+    if "bill" not in text:
+        return False
+
+    return (
+        "this month" in text
+        and "last month" in text
+    ) or (
+        "current month" in text
+        and (
+            "previous month" in text
+            or "last month" in text
+        )
+    )
+
+
+def _align_bill_comparison_with_message(
+    user_message: str,
+    response: LLMIntentResponse,
+) -> LLMIntentResponse:
+    if response.intent not in {
+        Intent.GET_BILL_COMPARISON,
+        Intent.EXPLAIN_BILL_CHANGE,
+    }:
+        return response
+
+    text = user_message.lower().strip()
+    params = response.parameters
+
+    if params.current_bill_id or params.previous_bill_id:
+        return response
+
+    if _message_names_calendar_month(text):
+        return response
+
+    if _requests_calendar_month_bill_pair(text):
+        from datetime import date
+
+        from app.business.dates import shift_month
+
+        today = date.today()
+        previous_year, previous_month = shift_month(
+            today.year,
+            today.month,
+            -1,
+        )
+        params.month = today.month
+        params.year = today.year
+        params.comparison_month = previous_month
+        params.comparison_year = previous_year
+        return response
+
+    if _requests_latest_previous_bill_pair(text):
+        params.month = None
+        params.year = None
+        params.comparison_month = None
+        params.comparison_year = None
+
+    return response
+
+
+def _normalize_extracted_intent(
+    response: LLMIntentResponse,
+    user_message: str | None = None,
+) -> LLMIntentResponse:
+    from app.intent.retired import (
+        is_retired_intent,
+        retired_intent_message,
+    )
+
+    if is_retired_intent(response.intent):
+        return LLMIntentResponse(
+            intent=Intent.UNSUPPORTED,
+            parameters=IntentParameters(),
+            clarification=retired_intent_message(),
+        )
+
+    if user_message:
+        response = _align_bill_comparison_with_message(
+            user_message,
+            response,
+        )
+
+    return response
 
 
 def classify_deterministic_request(
@@ -1667,7 +1765,18 @@ def classify_deterministic_request(
         .strip()
     )
 
+    demo = classify_demo_question(user_message)
+    if demo is not None:
+        return demo
+
     # Phase 5 must run before the individual domains.
+    unpaid_bills = _classify_unpaid_bills_request(
+        text,
+    )
+
+    if unpaid_bills is not None:
+        return unpaid_bills
+
     phase5 = classify_phase5_request(
         user_message
     )
@@ -1688,6 +1797,21 @@ def classify_deterministic_request(
 
     if billing_service is not None:
         return billing_service
+
+    simplified_bill = _classify_simplified_bill_request(
+        text
+    )
+
+    if simplified_bill is not None:
+        return simplified_bill
+
+    plan_comparison = _classify_plan_comparison(
+        user_message,
+        text,
+    )
+
+    if plan_comparison is not None:
+        return plan_comparison
 
     subscription_inventory = _classify_subscription_inventory(
         text
@@ -1895,14 +2019,18 @@ class GroqLLMClient:
                 log_intent_llm_usage,
             )
 
+            normalized = _normalize_extracted_intent(
+                deterministic_result,
+                user_message,
+            )
             log_intent_llm_usage(
-                intent=deterministic_result.intent.value,
+                intent=normalized.intent.value,
                 prompt_tokens=None,
                 completion_tokens=None,
                 total_tokens=None,
                 deterministic=True,
             )
-            return deterministic_result
+            return normalized
 
         if (
             "prompt-guard"
@@ -1981,14 +2109,18 @@ class GroqLLMClient:
                 prompt_t, completion_t, total_t = (
                     extract_usage_tokens(response)
                 )
+                normalized = _normalize_extracted_intent(
+                    parsed,
+                    user_message,
+                )
                 log_intent_llm_usage(
-                    intent=parsed.intent.value,
+                    intent=normalized.intent.value,
                     prompt_tokens=prompt_t,
                     completion_tokens=completion_t,
                     total_tokens=total_t,
                     deterministic=False,
                 )
-                return parsed
+                return normalized
             except Exception:
                 if repair_attempt == 1:
                     break
@@ -2024,6 +2156,7 @@ class GroqLLMClient:
         backend_output: str,
         *,
         max_tokens: int | None = None,
+        narrative_profile: str = "default",
     ) -> str:
         """Turn a backend-generated factual answer into customer-facing prose."""
 
@@ -2032,9 +2165,19 @@ class GroqLLMClient:
                 "The backend did not produce an answer to personalize."
             )
 
-        token_cap = max_tokens or (
-            self._settings.response_max_tokens_light
-        )
+        if narrative_profile == "customer_360":
+            system_prompt = (
+                build_customer_360_response_system_prompt()
+            )
+            token_cap = max_tokens or (
+                self._settings.response_max_tokens_full
+            )
+        else:
+            system_prompt = build_response_system_prompt()
+            token_cap = max_tokens or (
+                self._settings.response_max_tokens_light
+            )
+
         response = None
 
         for attempt in range(3):
@@ -2047,7 +2190,7 @@ class GroqLLMClient:
                         messages=[
                             {
                                 "role": "system",
-                                "content": build_response_system_prompt(),
+                                "content": system_prompt,
                             },
                             {
                                 "role": "user",
@@ -2111,6 +2254,7 @@ class GroqLLMClient:
         backend_output: str,
         *,
         max_tokens: int | None = None,
+        narrative_profile: str = "default",
     ) -> Iterator[str]:
         """Yield final-answer text deltas for verified backend output."""
 
@@ -2119,9 +2263,19 @@ class GroqLLMClient:
                 "The backend did not produce an answer to personalize."
             )
 
-        token_cap = max_tokens or (
-            self._settings.response_max_tokens_light
-        )
+        if narrative_profile == "customer_360":
+            system_prompt = (
+                build_customer_360_response_system_prompt()
+            )
+            token_cap = max_tokens or (
+                self._settings.response_max_tokens_full
+            )
+        else:
+            system_prompt = build_response_system_prompt()
+            token_cap = max_tokens or (
+                self._settings.response_max_tokens_light
+            )
+
         stream = None
 
         for attempt in range(3):
@@ -2134,7 +2288,7 @@ class GroqLLMClient:
                         messages=[
                             {
                                 "role": "system",
-                                "content": build_response_system_prompt(),
+                                "content": system_prompt,
                             },
                             {
                                 "role": "user",
