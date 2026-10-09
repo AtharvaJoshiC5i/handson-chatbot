@@ -373,9 +373,9 @@ export default function App() {
             <main
               id="conversation"
               aria-busy={loading}
-              className="chat-canvas min-h-0 flex-1 overflow-hidden"
+              className="chat-canvas flex min-h-0 flex-1 flex-col overflow-hidden"
             >
-              <div className="mx-auto flex h-full w-full max-w-[800px] flex-col">
+              <div className="mx-auto flex h-full min-h-0 w-full max-w-[800px] flex-col">
                 {!hasConversation ? (
                   <WelcomePanel
                     name={displayName}

@@ -47,13 +47,13 @@ export function WelcomePanel({
   return (
     <div
       className={[
-        "welcome-panel flex min-h-0 flex-1 flex-col items-center px-5 py-6 sm:px-6",
-        manyAlerts
-          ? "justify-start overflow-y-auto sm:py-8"
-          : "justify-center",
+        "welcome-panel flex min-h-0 w-full flex-1 flex-col items-center",
+        "overflow-x-hidden overflow-y-auto overscroll-contain",
+        "px-4 py-5 pb-24 sm:px-6 sm:py-8 lg:pb-8",
+        manyAlerts ? "welcome-panel--dense" : "",
       ].join(" ")}
     >
-      <div className="welcome-landing w-full max-w-[600px]">
+      <div className="welcome-landing w-full min-w-0 max-w-[600px]">
         <header className="text-center">
           <h1 className="welcome-heading text-[26px] font-semibold tracking-tight text-[var(--color-brand)] sm:text-[30px]">
             Hi, {firstName}
@@ -130,7 +130,7 @@ export function WelcomePanel({
           <p className="welcome-section-label">Quick questions</p>
 
           <div
-            className="welcome-topic-grid mt-3.5 flex flex-wrap justify-center gap-2"
+            className="welcome-topic-grid mt-3.5"
             aria-label="Quick questions"
           >
             {visiblePrompts.map((item) => {
