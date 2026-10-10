@@ -4,7 +4,6 @@ import {
   ChevronLeft,
   ChevronRight,
   CreditCard,
-  Database,
   Headphones,
   RefreshCw,
   Search,
@@ -199,34 +198,6 @@ export function DatabaseExplorerPage({
 
   return (
     <div className="db-explorer flex min-h-0 flex-1 flex-col">
-      <header className="db-explorer-hero">
-        <div className="db-explorer-hero-text">
-          <div className="db-explorer-hero-title-row">
-            <span className="db-explorer-hero-icon" aria-hidden>
-              <Database size={18} strokeWidth={2} />
-            </span>
-            <div>
-              <h1 className="db-explorer-title">Database viewer</h1>
-              <p className="db-explorer-subtitle">
-                Read-only nexatel.db — browse seeded records with search and
-                filters.
-              </p>
-            </div>
-          </div>
-        </div>
-        {selectedMeta && (
-          <div className="db-explorer-hero-stat">
-            <span className="db-explorer-hero-stat-label">Active table</span>
-            <span className="db-explorer-hero-stat-value">
-              {selectedMeta.label}
-            </span>
-            <span className="db-explorer-hero-stat-meta">
-              {selectedMeta.row_count.toLocaleString("en-IN")} rows total
-            </span>
-          </div>
-        )}
-      </header>
-
       <div className="db-explorer-body">
         <aside className="db-explorer-sidebar" aria-label="Tables">
           {TABLE_GROUPS.map((group) => {
@@ -355,6 +326,20 @@ export function DatabaseExplorerPage({
                 aria-hidden
               />
             </button>
+
+            {selectedMeta && (
+              <div
+                className="db-explorer-toolbar-table"
+                aria-label="Active table"
+              >
+                <span className="db-explorer-toolbar-table-name">
+                  {selectedMeta.label}
+                </span>
+                <span className="db-explorer-toolbar-table-meta">
+                  {selectedMeta.row_count.toLocaleString("en-IN")} rows
+                </span>
+              </div>
+            )}
           </div>
 
           {result && (

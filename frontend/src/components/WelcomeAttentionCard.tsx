@@ -120,7 +120,14 @@ export function WelcomeAttentionCard({
         )}
       </div>
 
-      <ul className="welcome-glance-alerts-list">
+      <ul
+        className={[
+          "welcome-glance-alerts-list",
+          expanded && sortedItems.length > COLLAPSED_VISIBLE
+            ? "welcome-glance-alerts-list--scrollable"
+            : "",
+        ].join(" ")}
+      >
         {visibleItems.map((item) => {
           const Icon = domainIcon(item.domain);
           const isHigh = item.severity === "high";

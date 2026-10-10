@@ -47,13 +47,13 @@ export function WelcomePanel({
   return (
     <div
       className={[
-        "welcome-panel flex min-h-0 w-full flex-1 flex-col items-center",
-        "overflow-x-hidden overflow-y-auto overscroll-contain",
-        "px-4 py-5 pb-24 sm:px-6 sm:py-8 lg:pb-8",
+        "welcome-panel welcome-panel--scroll flex min-h-0 w-full flex-1 flex-col items-center",
+        "overflow-x-hidden overscroll-contain",
         manyAlerts ? "welcome-panel--dense" : "",
+        "px-4 py-4 sm:px-6 sm:py-6",
       ].join(" ")}
     >
-      <div className="welcome-landing w-full min-w-0 max-w-[600px]">
+      <div className="welcome-landing my-auto w-full min-w-0 max-w-[600px]">
         <header className="text-center">
           <h1 className="welcome-heading text-[26px] font-semibold tracking-tight text-[var(--color-brand)] sm:text-[30px]">
             Hi, {firstName}
@@ -73,7 +73,7 @@ export function WelcomePanel({
         ) : snapshot ? (
           <>
             <section
-              className="welcome-glance-wrap welcome-snapshot-premium mx-auto mt-8 max-w-md sm:max-w-lg"
+              className="welcome-glance-wrap welcome-snapshot-premium mx-auto mt-6 max-w-full sm:mt-8 sm:max-w-lg"
               aria-label="Account at a glance"
             >
               <div className="welcome-snapshot welcome-snapshot--in-glance">

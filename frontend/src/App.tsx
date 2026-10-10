@@ -262,13 +262,15 @@ export default function App() {
   };
 
   const sharedHeader = (
-    <header className="surface-header flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-line)] px-4 sm:px-6">
-      <div>
+    <header className="surface-header flex h-14 shrink-0 items-center justify-between gap-3 border-b border-[var(--color-line)] px-4 sm:px-6">
+      <div className="min-w-0 flex-1">
         <p className="text-[13px] font-semibold tracking-tight text-[var(--color-ink)]">
           {headerTitle(appPage)}
         </p>
         <p className="text-[11px] text-[var(--color-muted)]">
-          {profile?.phone_masked ?? "Select a customer"}
+          {appPage === "database"
+            ? "Read-only nexatel.db — browse with search and filters"
+            : (profile?.phone_masked ?? "Select a customer")}
         </p>
       </div>
 
@@ -375,7 +377,7 @@ export default function App() {
               aria-busy={loading}
               className="chat-canvas flex min-h-0 flex-1 flex-col overflow-hidden"
             >
-              <div className="mx-auto flex h-full min-h-0 w-full max-w-[800px] flex-col">
+              <div className="mx-auto flex h-full min-h-0 w-full min-w-0 max-w-[800px] flex-col overflow-x-hidden">
                 {!hasConversation ? (
                   <WelcomePanel
                     name={displayName}

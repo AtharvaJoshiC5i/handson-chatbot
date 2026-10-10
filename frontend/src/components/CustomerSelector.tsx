@@ -20,7 +20,7 @@ export function CustomerSelector({
     : [{ customer_id: customerId, name: customerId, phone_masked: "" }];
 
   return (
-    <div className="relative inline-flex max-w-[min(100vw-2rem,280px)]">
+    <div className="relative inline-flex min-w-0 max-w-[min(100%,17.5rem)]">
       <select
         id="customer-selector"
         value={customerId}
