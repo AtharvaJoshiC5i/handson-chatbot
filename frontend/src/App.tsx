@@ -14,7 +14,6 @@ import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ChatWindow } from "./components/ChatWindow";
 import { CustomerSelector } from "./components/CustomerSelector";
 import { MessageInput } from "./components/MessageInput";
-import { ChatAccountGlance } from "./components/ChatAccountGlance";
 import { WelcomePanel } from "./components/WelcomePanel";
 import { DatabaseExplorerPage } from "./pages/DatabaseExplorerPage";
 import { metadataCompletesStreamingTurn } from "./utils/streamingTurn";
@@ -573,12 +572,6 @@ export default function App() {
                     loading={loading}
                     onOptionSelect={handleSend}
                   />
-                )}
-
-                {hasConversation && snapshot && (
-                  <div className="shrink-0 px-4 pb-2">
-                    <ChatAccountGlance snapshot={snapshot} />
-                  </div>
                 )}
 
                 {error && (

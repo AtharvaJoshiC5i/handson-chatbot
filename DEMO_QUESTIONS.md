@@ -1,10 +1,10 @@
 ## Structured UI — what to expect (customer in parentheses)
 
-Use **New chat** on the welcome screen for proactive snapshot (plan / usage / bill, suggested next step, attention list). After the first message, the same glance stays above the input.
+Use **New chat** on the welcome screen for proactive snapshot (plan / usage / bill, suggested next step, attention list).
 
 | Feature | Try this (customer) | What you should see |
 |--------|---------------------|---------------------|
-| Proactive snapshot | Open app, **CUST002** or **CUST004** | Welcome cards; in chat, compact Plan / Usage / Bill bar above input |
+| Proactive snapshot | Open app, **CUST002** or **CUST004** | Welcome screen plan / usage / bill grid, suggested next step, attention list |
 | Disambiguation | `How much have I used?` | **Choose an option** card (not plain grey chips only) |
 | Trust strip | `How much data have I used this month?` (**CUST002**) | Green **October 2026 · MOBILE** pill + usage meter widget |
 | Bill & payment | `What is my current bill and payment status?` (**CUST002**) | **Bill & payment** 3-column card + period strip |
