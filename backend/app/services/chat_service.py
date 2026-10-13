@@ -13,9 +13,12 @@ from app.models.api import (
     ChatOption,
     ChatPresentation,
     ChatResponse,
+    ChoiceListPresentation,
+    PresentationMeta,
 )
 from app.models.domain import (
     CustomerContext,
+    TruthStatus,
 )
 from app.services.conversation_service import (
     ConversationService,
@@ -33,6 +36,12 @@ from app.services.response_service import (
 from app.services.response_turn_metrics import (
     log_response_turn,
 )
+from app.services.chat_history_service import (
+    ChatHistoryService,
+)
+from app.services.conversation_context_store import (
+    save_conversation_context,
+)
 from app.services.structured_data_service import (
     StructuredDataService,
 )
@@ -41,6 +50,7 @@ from app.utils.errors import LLMError
 
 
 _DEFAULT_CONVERSATION_SERVICE = ConversationService()
+_DEFAULT_CHAT_HISTORY_SERVICE = ChatHistoryService()
 
 
 def _narrative_profile(
@@ -50,6 +60,86 @@ def _narrative_profile(
         return "customer_360"
 
     return "default"
+
+
+def _presentation_meta_from_truth(
+    truth_result: TruthResult,
+) -> PresentationMeta | None:
+    data = truth_result.data
+    if not isinstance(data, dict):
+        return None
+
+    period = data.get("period")
+    if isinstance(period, str) and period.strip():
+        scope = data.get("plan_type")
+        scope_label = (
+            str(scope).strip()
+            if isinstance(scope, str) and scope.strip()
+            else None
+        )
+        return PresentationMeta(
+            period_label=period.strip(),
+            scope_label=scope_label,
+        )
+
+    billing_period = data.get("billing_period")
+    if isinstance(billing_period, str) and billing_period.strip():
+        return PresentationMeta(
+            period_label=billing_period.strip(),
+        )
+
+    bill = data.get("bill")
+    if isinstance(bill, dict):
+        bill_period = bill.get("period")
+        if isinstance(bill_period, str) and bill_period.strip():
+            plan_type = bill.get("plan_type")
+            scope_label = (
+                str(plan_type).strip()
+                if isinstance(plan_type, str) and plan_type.strip()
+                else None
+            )
+            return PresentationMeta(
+                period_label=bill_period.strip(),
+                scope_label=scope_label,
+            )
+
+    return None
+
+
+def _finalize_chat_response(
+    *,
+    truth_result: TruthResult,
+    options: list[ChatOption],
+    message: str,
+    source: str | None,
+    presentation: ChatPresentation | None,
+    backend_output: str,
+) -> ChatResponse:
+    if (
+        truth_result.status == TruthStatus.AMBIGUOUS
+        and options
+    ):
+        presentation = ChoiceListPresentation(
+            title="Choose an option",
+            prompt=(message or backend_output).strip()
+            or None,
+            choices=options,
+        )
+
+    presentation_meta = None
+    if truth_result.status == TruthStatus.VERIFIED:
+        presentation_meta = _presentation_meta_from_truth(
+            truth_result,
+        )
+
+    return ChatResponse(
+        message=message,
+        status=truth_result.status.value,
+        source=source,
+        presentation=presentation,
+        presentation_meta=presentation_meta,
+        options=options,
+    )
 
 
 def _result_type_from_truth(
@@ -72,11 +162,16 @@ class ChatService:
         self,
         llm_client: GroqLLMClient,
         conversation_service: ConversationService | None = None,
+        chat_history_service: ChatHistoryService | None = None,
     ) -> None:
         self._llm_client = llm_client
         self._conversation_service = (
             conversation_service
             or _DEFAULT_CONVERSATION_SERVICE
+        )
+        self._chat_history_service = (
+            chat_history_service
+            or _DEFAULT_CHAT_HISTORY_SERVICE
         )
 
         self._intent_extractor = (
@@ -123,18 +218,31 @@ class ChatService:
         and optional structured presentation.
         """
 
-        truth_result, options, intent_name = self._process_turn(
+        (
+            truth_result,
+            options,
+            intent_name,
+            resolved_conversation_id,
+        ) = self._process_turn(
             db=db,
             customer=customer,
             user_message=user_message,
             conversation_id=conversation_id,
         )
 
-        return self._build_chat_response(
+        response = self._build_chat_response(
             truth_result=truth_result,
             options=options,
             intent_name=intent_name,
         )
+        self._persist_history(
+            db=db,
+            customer=customer,
+            conversation_id=resolved_conversation_id,
+            user_message=user_message,
+            response=response,
+        )
+        return response
 
     def respond_stream(
         self,
@@ -146,12 +254,20 @@ class ChatService:
     ) -> tuple[ChatResponse, Iterator[str]]:
         """Resolve a turn on the backend and stream only its final wording."""
 
-        truth_result, options, intent_name = self._process_turn(
+        (
+            truth_result,
+            options,
+            intent_name,
+            resolved_conversation_id,
+        ) = self._process_turn(
             db=db,
             customer=customer,
             user_message=user_message,
             conversation_id=conversation_id,
         )
+        self._stream_conversation_id = resolved_conversation_id
+        self._stream_user_message = user_message
+        self._stream_customer = customer
         backend_output, presentation, skip_rewrite = (
             self._prepare_narrative(
                 truth_result=truth_result,
@@ -175,21 +291,31 @@ class ChatService:
             narrative_message = ""
             if not widget_only and presentation is None:
                 narrative_message = backend_output
-            metadata = ChatResponse(
+            elif (
+                not widget_only
+                and presentation is not None
+                and backend_output.strip()
+            ):
+                # Widget-first turn: still expose narrative in metadata so
+                # the client can unlock the composer without waiting on LLM.
+                narrative_message = backend_output
+            metadata = _finalize_chat_response(
+                truth_result=truth_result,
+                options=options,
                 message=narrative_message,
-                status=truth_result.status.value,
                 source=source,
                 presentation=presentation,
-                options=options,
+                backend_output=backend_output,
             )
             return metadata, iter(())
 
-        metadata = ChatResponse(
+        metadata = _finalize_chat_response(
+            truth_result=truth_result,
+            options=options,
             message="",
-            status=truth_result.status.value,
             source=source,
             presentation=presentation,
-            options=options,
+            backend_output=backend_output,
         )
 
         generate_response_stream = getattr(
@@ -265,7 +391,12 @@ class ChatService:
         customer: CustomerContext,
         user_message: str,
         conversation_id: str | None,
-    ) -> tuple[TruthResult, list[ChatOption], str | None]:
+    ) -> tuple[
+        TruthResult,
+        list[ChatOption],
+        str | None,
+        str,
+    ]:
         conversation_id = conversation_id or uuid4().hex
         context = self._conversation_service.get_context(
             conversation_id,
@@ -296,7 +427,86 @@ class ChatService:
             for option in intent_response.options
         ]
         intent_name = intent_response.intent.value
-        return truth_result, options, intent_name
+        save_conversation_context(
+            db,
+            conversation_id=conversation_id,
+            customer_id=customer.customer_id,
+            context=context,
+        )
+        return (
+            truth_result,
+            options,
+            intent_name,
+            conversation_id,
+        )
+
+    def persist_streamed_response(
+        self,
+        db: sqlite3.Connection,
+        *,
+        response: ChatResponse,
+        assistant_message: str,
+    ) -> None:
+        conversation_id = getattr(
+            self,
+            "_stream_conversation_id",
+            None,
+        )
+        user_message = getattr(
+            self,
+            "_stream_user_message",
+            None,
+        )
+        customer = getattr(self, "_stream_customer", None)
+
+        if (
+            not conversation_id
+            or not user_message
+            or customer is None
+        ):
+            return
+
+        merged = ChatResponse(
+            message=assistant_message or response.message,
+            status=response.status,
+            source=response.source,
+            presentation=response.presentation,
+            presentation_meta=response.presentation_meta,
+            options=response.options,
+        )
+        self._persist_history(
+            db=db,
+            customer=customer,
+            conversation_id=conversation_id,
+            user_message=user_message,
+            response=merged,
+        )
+
+    def _persist_history(
+        self,
+        *,
+        db: sqlite3.Connection,
+        customer: CustomerContext,
+        conversation_id: str,
+        user_message: str,
+        response: ChatResponse,
+    ) -> None:
+        assistant_text = response.message.strip()
+        if not assistant_text and response.presentation is None:
+            return
+
+        self._chat_history_service.record_exchange(
+            db,
+            conversation_id=conversation_id,
+            customer_id=customer.customer_id,
+            user_message=user_message,
+            assistant_message=assistant_text,
+            status=response.status,
+            source=response.source,
+            presentation=response.presentation,
+            presentation_meta=response.presentation_meta,
+            options=response.options,
+        )
 
     def _prepare_narrative(
         self,
@@ -415,14 +625,11 @@ class ChatService:
                 .source_name
             )
 
-        return ChatResponse(
+        return _finalize_chat_response(
+            truth_result=truth_result,
+            options=options,
             message=message,
-            status=(
-                truth_result
-                .status
-                .value
-            ),
             source=source,
             presentation=presentation,
-            options=options,
+            backend_output=backend_output,
         )

@@ -31,6 +31,11 @@ import {
 } from "./TicketTimeline";
 import { UsageMeter } from "./UsageMeter";
 import { Customer360View } from "./Customer360View";
+import { ChoiceListCard } from "./ChoiceListCard";
+import {
+  BillPaymentSummaryCard,
+  isBillPaymentSummaryPresentation,
+} from "./BillPaymentSummaryCard";
 import { chartPresentationShell } from "../lib/presentationStyles";
 
 const TimeSeriesChart = lazy(() =>
@@ -42,6 +47,7 @@ const TimeSeriesChart = lazy(() =>
 interface StructuredPresentationProps {
   presentation: ChatPresentation;
   onEntitySelect?: (message: string) => void;
+  optionsDisabled?: boolean;
 }
 
 interface PresentationTitleProps {
@@ -352,6 +358,14 @@ function SummaryResult({
     return null;
   }
 
+  if (isBillPaymentSummaryPresentation(presentation)) {
+    return (
+      <div className="structured-export">
+        <BillPaymentSummaryCard presentation={presentation} />
+      </div>
+    );
+  }
+
   return (
           <div className="overflow-hidden rounded-lg border border-[#dfe7e0] bg-white shadow-[0_1px_4px_rgba(23,60,50,0.03)]">
       <PresentationTitle title={presentation.title} />
@@ -387,8 +401,18 @@ function SummaryResult({
 export function StructuredPresentation({
   presentation,
   onEntitySelect,
+  optionsDisabled = false,
 }: StructuredPresentationProps) {
   switch (presentation.type) {
+    case "choice_list":
+      return (
+        <ChoiceListCard
+          presentation={presentation}
+          disabled={optionsDisabled}
+          onSelect={onEntitySelect}
+        />
+      );
+
     case "key_value":
       return (
         <KeyValueResult

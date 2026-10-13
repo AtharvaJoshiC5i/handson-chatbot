@@ -13,7 +13,7 @@ from fastapi import (
     HTTPException,
     status,
 )
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 
 from app.config.settings import (
     Settings,
@@ -30,6 +30,10 @@ from app.services.account_snapshot_service import (
 from app.llm.client import GroqLLMClient
 from app.models.api import (
     AccountSnapshotResponse,
+    ChatConversationListResponse,
+    ChatConversationMessagesResponse,
+    ChatConversationSummary,
+    ChatHistoryMessage,
     ChatRequest,
     ChatResponse,
     ConversationResetRequest,
@@ -38,8 +42,10 @@ from app.models.api import (
     DemoCustomersResponse,
 )
 from app.models.domain import CustomerContext
+from app.services.chat_history_service import ChatHistoryService
 from app.services.chat_service import ChatService
 from app.services.conversation_service import ConversationService
+from app.database.queries.chat_history import delete_conversation
 from app.utils.errors import LLMError
 
 
@@ -59,6 +65,7 @@ def _sse_event(
     )
 
 conversation_service = ConversationService()
+chat_history_service = ChatHistoryService()
 
 
 def get_customer_context(
@@ -296,14 +303,23 @@ def chat_stream(
             metadata.model_dump(mode="json"),
         )
 
+        collected: list[str] = []
+
         try:
             for text_delta in text_stream:
                 if text_delta:
+                    collected.append(text_delta)
                     yield _sse_event(
                         "delta",
                         {"text": text_delta},
                     )
 
+            assistant_text = "".join(collected)
+            service.persist_streamed_response(
+                db,
+                response=metadata,
+                assistant_message=assistant_text,
+            )
             yield _sse_event("done", {})
         except LLMError as exc:
             yield _sse_event(
@@ -319,6 +335,133 @@ def chat_stream(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.get(
+    "/conversations",
+    response_model=ChatConversationListResponse,
+)
+def list_chat_conversations(
+    customer: CustomerContext = Depends(
+        get_customer_context
+    ),
+    db: sqlite3.Connection = Depends(
+        get_db
+    ),
+    scope: str = "customer",
+) -> ChatConversationListResponse:
+    """
+    List persisted chat threads.
+
+    Default scope returns only the authenticated customer's threads.
+    Use scope=all for the demo workspace view (all customers).
+    """
+
+    if scope == "all":
+        rows = chat_history_service.list_all(db)
+    else:
+        rows = chat_history_service.list_for_customer(
+            db,
+            customer.customer_id,
+        )
+
+    conversations = [
+        ChatConversationSummary(
+            conversation_id=row["conversation_id"],
+            customer_id=row["customer_id"],
+            customer_name=row["customer_name"],
+            title=row["title"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
+        for row in rows
+    ]
+
+    return ChatConversationListResponse(
+        conversations=conversations,
+    )
+
+
+@router.get(
+    "/conversations/{conversation_id}/messages",
+    response_model=ChatConversationMessagesResponse,
+)
+def get_chat_conversation_messages(
+    conversation_id: str,
+    customer: CustomerContext = Depends(
+        get_customer_context
+    ),
+    db: sqlite3.Connection = Depends(
+        get_db
+    ),
+) -> ChatConversationMessagesResponse:
+    """Load one customer's persisted messages for a conversation."""
+
+    from app.database.queries.customers import (
+        get_customer,
+    )
+
+    conversation_service.restore_persisted_context(
+        db,
+        conversation_id,
+        customer,
+    )
+
+    rows = chat_history_service.load_messages(
+        db,
+        conversation_id=conversation_id,
+        customer_id=customer.customer_id,
+    )
+
+    if not rows:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found.",
+        )
+
+    profile = get_customer(db, customer.customer_id)
+    customer_name = (
+        profile["name"] if profile is not None else customer.customer_id
+    )
+
+    messages = [
+        ChatHistoryMessage.model_validate(message)
+        for message in rows
+    ]
+
+    return ChatConversationMessagesResponse(
+        conversation_id=conversation_id,
+        customer_id=customer.customer_id,
+        customer_name=customer_name,
+        messages=messages,
+    )
+
+
+@router.delete("/conversations/{conversation_id}")
+def delete_chat_conversation(
+    conversation_id: str,
+    customer: CustomerContext = Depends(
+        get_customer_context
+    ),
+    db: sqlite3.Connection = Depends(
+        get_db
+    ),
+) -> Response:
+    """Remove one persisted conversation for the authenticated customer."""
+
+    removed = delete_conversation(
+        db,
+        conversation_id=conversation_id,
+        customer_id=customer.customer_id,
+    )
+
+    if not removed:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conversation not found.",
+        )
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post("/reset")

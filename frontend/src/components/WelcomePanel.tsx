@@ -7,8 +7,13 @@ import {
   QUICK_QUESTIONS_ANALYTICS,
   QUICK_QUESTIONS_TO_GET_STARTED,
 } from "../utils/quickQuestions";
-import { prioritizeQuickQuestions } from "../utils/welcomePersonalization";
+import {
+  isSuspendedAccountSnapshot,
+  pickNextBestAttention,
+  prioritizeQuickQuestions,
+} from "../utils/welcomePersonalization";
 import { WelcomeAttentionCard } from "./WelcomeAttentionCard";
+import { WelcomeNextBestCard } from "./WelcomeNextBestCard";
 
 interface WelcomePanelProps {
   name: string;
@@ -31,6 +36,12 @@ export function WelcomePanel({
 
   const attentionItems = snapshot?.attention_items ?? [];
   const manyAlerts = attentionItems.length >= 3;
+  const nextBest = snapshot
+    ? pickNextBestAttention(attentionItems)
+    : null;
+  const suspended = snapshot
+    ? isSuspendedAccountSnapshot(snapshot)
+    : false;
 
   const basePrompts = showMorePrompts
     ? [...QUICK_QUESTIONS_TO_GET_STARTED, ...QUICK_QUESTIONS_ANALYTICS]
@@ -60,8 +71,9 @@ export function WelcomePanel({
           </h1>
           <span className="welcome-heading-accent" aria-hidden="true" />
           <p className="welcome-description mx-auto mt-3 max-w-md text-[13px] leading-relaxed text-[var(--color-muted)]">
-            Structured answers from your account — plan, usage, bills, and
-            payments.
+            {suspended
+              ? "Your account needs attention before new services can be added. Review billing and support options below."
+              : "Structured answers from your account — plan, usage, bills, and payments."}
           </p>
         </header>
 
@@ -73,9 +85,26 @@ export function WelcomePanel({
         ) : snapshot ? (
           <>
             <section
-              className="welcome-glance-wrap welcome-snapshot-premium mx-auto mt-6 max-w-full sm:mt-8 sm:max-w-lg"
+              className={[
+                "welcome-glance-wrap welcome-snapshot-premium mx-auto mt-6 max-w-full sm:mt-8 sm:max-w-lg",
+                suspended ? "welcome-glance-wrap--suspended" : "",
+              ].join(" ")}
               aria-label="Account at a glance"
             >
+              {suspended && (
+                <p className="welcome-suspended-banner" role="status">
+                  Account {snapshot.account_status.toLowerCase().replace(/_/g, " ")}
+                </p>
+              )}
+
+              {nextBest && (
+                <WelcomeNextBestCard
+                  item={nextBest}
+                  disabled={disabled}
+                  onPrompt={onPrompt}
+                />
+              )}
+
               <div className="welcome-snapshot welcome-snapshot--in-glance">
                 <div className="welcome-snapshot-grid">
                   <div className="welcome-stat-cell">

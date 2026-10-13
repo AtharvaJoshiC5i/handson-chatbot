@@ -130,6 +130,18 @@ export interface Customer360Presentation {
   tables: Customer360Table[];
 }
 
+export interface ChoiceListPresentation {
+  type: "choice_list";
+  title?: string | null;
+  prompt?: string | null;
+  choices: ChatOption[];
+}
+
+export interface PresentationMeta {
+  period_label?: string | null;
+  scope_label?: string | null;
+}
+
 export type ChatPresentation =
   | KeyValuePresentation
   | ComparisonPresentation
@@ -138,7 +150,8 @@ export type ChatPresentation =
   | TimeSeriesPresentation
   | SummaryPresentation
   | PlanRecommendationPresentation
-  | Customer360Presentation;
+  | Customer360Presentation
+  | ChoiceListPresentation;
 
 /* ============================================================
  * API contract
@@ -150,6 +163,7 @@ export interface ChatResponse {
   status: ChatResponseStatus;
   source: string | null;
   presentation?: ChatPresentation | null;
+  presentation_meta?: PresentationMeta | null;
   options: ChatOption[];
 }
 
@@ -165,7 +179,17 @@ export interface ChatMessage {
   status?: ChatResponseStatus;
   source?: string | null;
   presentation?: ChatPresentation | null;
+  presentationMeta?: PresentationMeta | null;
   options?: ChatOption[];
   createdAt: Date;
   isStreaming?: boolean;
+}
+
+export interface ChatConversationSummary {
+  conversation_id: string;
+  customer_id: string;
+  customer_name: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
 }

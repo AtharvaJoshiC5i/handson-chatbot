@@ -66,9 +66,7 @@ export function ChatWindow({
               onOptionSelect={
                 onOptionSelect
               }
-              optionsDisabled={
-                loading
-              }
+              optionsDisabled={Boolean(message.isStreaming)}
             />
           ),
         )}

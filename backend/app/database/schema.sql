@@ -371,3 +371,43 @@ CREATE INDEX IF NOT EXISTS idx_devices_customer
 
 CREATE INDEX IF NOT EXISTS idx_account_credits_customer
     ON account_credits(customer_id, credit_date);
+
+
+-- ============================================================
+-- CHAT HISTORY (per customer, persisted for the demo UI)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS chat_conversations (
+    conversation_id TEXT PRIMARY KEY,
+    customer_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+
+    FOREIGN KEY (customer_id)
+        REFERENCES customers(customer_id)
+        ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS chat_messages (
+    message_id TEXT PRIMARY KEY,
+    conversation_id TEXT NOT NULL,
+    role TEXT NOT NULL
+        CHECK (role IN ('user', 'assistant')),
+    content TEXT NOT NULL,
+    status TEXT,
+    source TEXT,
+    presentation_json TEXT,
+    options_json TEXT,
+    created_at TEXT NOT NULL,
+
+    FOREIGN KEY (conversation_id)
+        REFERENCES chat_conversations(conversation_id)
+        ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_conversations_customer_updated
+    ON chat_conversations(customer_id, updated_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation_created
+    ON chat_messages(conversation_id, created_at ASC);

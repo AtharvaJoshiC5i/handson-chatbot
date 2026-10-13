@@ -264,6 +264,40 @@ export function subscriptionMonthlyPrice(
   return sub?.monthly_price ?? null;
 }
 
+export function pickNextBestAttention(
+  items: AccountSnapshot["attention_items"],
+): AccountSnapshot["attention_items"][number] | null {
+  if (!items.length) {
+    return null;
+  }
+
+  const sorted = [...items].sort((left, right) => {
+    const leftHigh = left.severity === "high" ? 0 : 1;
+    const rightHigh = right.severity === "high" ? 0 : 1;
+
+    if (leftHigh !== rightHigh) {
+      return leftHigh - rightHigh;
+    }
+
+    const leftHasPrompt = left.prompt?.trim() ? 0 : 1;
+    const rightHasPrompt = right.prompt?.trim() ? 0 : 1;
+
+    return leftHasPrompt - rightHasPrompt;
+  });
+
+  const candidate = sorted.find((item) => item.prompt?.trim());
+
+  return candidate ?? null;
+}
+
+export function isSuspendedAccountSnapshot(
+  snapshot: AccountSnapshot,
+): boolean {
+  const status = snapshot.account_status.toUpperCase();
+
+  return status === "SUSPENDED" || status === "CANCELLED";
+}
+
 export function serviceLocationLine(
   snapshot: AccountSnapshot,
 ): string | null {

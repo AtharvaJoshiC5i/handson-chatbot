@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from collections import OrderedDict, deque
 from dataclasses import dataclass, field
 from datetime import date
@@ -620,6 +621,31 @@ class ConversationService:
                 )
 
             return context
+
+    def restore_persisted_context(
+        self,
+        db: sqlite3.Connection,
+        conversation_id: str,
+        customer: CustomerContext,
+    ) -> None:
+        from app.services.conversation_context_store import (
+            apply_snapshot,
+            load_conversation_context,
+        )
+
+        payload = load_conversation_context(
+            db,
+            conversation_id=conversation_id,
+            customer_id=customer.customer_id,
+        )
+        if payload is None:
+            return
+
+        context = self.get_context(
+            conversation_id,
+            customer,
+        )
+        apply_snapshot(context, payload)
 
     def clear(
         self,

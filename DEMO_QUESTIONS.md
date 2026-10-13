@@ -1,3 +1,18 @@
+## Structured UI — what to expect (customer in parentheses)
+
+Use **New chat** on the welcome screen for proactive snapshot (plan / usage / bill, suggested next step, attention list). After the first message, the same glance stays above the input.
+
+| Feature | Try this (customer) | What you should see |
+|--------|---------------------|---------------------|
+| Proactive snapshot | Open app, **CUST002** or **CUST004** | Welcome cards; in chat, compact Plan / Usage / Bill bar above input |
+| Disambiguation | `How much have I used?` | **Choose an option** card (not plain grey chips only) |
+| Trust strip | `How much data have I used this month?` (**CUST002**) | Green **October 2026 · MOBILE** pill + usage meter widget |
+| Bill & payment | `What is my current bill and payment status?` (**CUST002**) | **Bill & payment** 3-column card + period strip |
+| Ticket timeline | `Show the full timeline for ticket TKT003.` (**CUST002**) | Vertical **Ticket timeline** with status chips |
+| Context restore | Ask `Show my latest bill`, then **open that chat from history**, then `How much is outstanding?` | Follow-up still understands the bill thread |
+
+---
+
 ## Account & plan
 
 - What is my account status?

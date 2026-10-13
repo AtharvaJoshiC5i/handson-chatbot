@@ -7,9 +7,14 @@ import {
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-import type { ChatMessage } from "../types/chat";
+import type {
+  ChatMessage,
+  ChoiceListPresentation,
+} from "../types/chat";
 
 import { AnswerTrustFooter } from "./AnswerTrustFooter";
+import { ChoiceListCard } from "./ChoiceListCard";
+import { PresentationTrustStrip } from "./PresentationTrustStrip";
 import { RichOptionCard } from "./RichOptionCard";
 import { StructuredPresentation } from "./StructuredPresentation";
 import { SuggestedFollowUps } from "./SuggestedFollowUps";
@@ -23,9 +28,35 @@ interface MessageBubbleProps {
   optionsDisabled?: boolean;
 }
 
+function resolveDisambiguationPresentation(
+  message: ChatMessage,
+): ChoiceListPresentation | null {
+  if (message.presentation?.type === "choice_list") {
+    return message.presentation;
+  }
+
+  if (
+    message.status === "AMBIGUOUS"
+    && (message.options?.length ?? 0) > 0
+  ) {
+    return {
+      type: "choice_list",
+      title: "Choose an option",
+      prompt: message.content.trim() || null,
+      choices: message.options ?? [],
+    };
+  }
+
+  return null;
+}
+
 function shouldShowNarrativeLead(
   message: ChatMessage,
 ): boolean {
+  if (resolveDisambiguationPresentation(message)) {
+    return false;
+  }
+
   if (!message.content.trim()) {
     return false;
   }
@@ -42,7 +73,40 @@ function shouldShowNarrativeLead(
     return false;
   }
 
+  if (message.presentation?.type === "choice_list") {
+    return false;
+  }
+
   return false;
+}
+
+function showStructuredOptions(message: ChatMessage): boolean {
+  if (resolveDisambiguationPresentation(message)) {
+    return false;
+  }
+
+  if (!message.options?.length) {
+    return false;
+  }
+
+  return message.presentation?.type !== "choice_list";
+}
+
+/** Dots only while waiting for the first payload — not beside a ready widget. */
+function showStreamingIndicator(message: ChatMessage): boolean {
+  if (!message.isStreaming) {
+    return false;
+  }
+
+  if (message.presentation) {
+    return false;
+  }
+
+  if ((message.options?.length ?? 0) > 0) {
+    return false;
+  }
+
+  return !message.content.trim();
 }
 
 function formatTime(date: Date) {
@@ -177,6 +241,16 @@ export function MessageBubble({
     message,
   );
 
+  const disambiguation = resolveDisambiguationPresentation(
+    message,
+  );
+
+  const structuredPresentation =
+    message.presentation
+    && message.presentation.type !== "choice_list"
+      ? message.presentation
+      : null;
+
   const followUps =
     showFollowUps
     && !message.isStreaming
@@ -285,9 +359,17 @@ export function MessageBubble({
 
   return (
     <div className="group w-full min-w-0">
+      {message.presentationMeta
+        && message.status === "VERIFIED"
+        && !disambiguation && (
+        <div className="mb-2.5 min-w-0">
+          <PresentationTrustStrip meta={message.presentationMeta} />
+        </div>
+      )}
+
       {showNarrativeLead ? (
         <AssistantMarkdown content={message.content} />
-      ) : message.presentation?.type === "customer_360" ? null : message.isStreaming ? (
+      ) : showStreamingIndicator(message) ? (
         <div className="flex h-7 items-center gap-1.5" role="status" aria-label="Response is being generated">
           <span className="size-1.5 animate-pulse rounded-full bg-[#8da391]" />
           <span className="size-1.5 animate-pulse rounded-full bg-[#8da391] [animation-delay:120ms]" />
@@ -295,24 +377,28 @@ export function MessageBubble({
         </div>
       ) : null}
 
-      {message.isStreaming && message.content && (
-        <span
-          className="ml-1 inline-block h-[1.05em] w-[2px] translate-y-[2px] animate-pulse bg-[#5c8066]"
-          aria-hidden="true"
-        />
+      {disambiguation && (
+        <div className="mt-3 min-w-0">
+          <ChoiceListCard
+            presentation={disambiguation}
+            disabled={optionsDisabled}
+            onSelect={onOptionSelect}
+          />
+        </div>
       )}
 
-      {message.presentation && (
+      {structuredPresentation && (
         <div
           className={
-            message.presentation.type === "customer_360"
+            structuredPresentation.type === "customer_360"
               ? "c360-message-shell mt-3 min-w-0"
               : "mt-4 min-w-0"
           }
         >
           <StructuredPresentation
-            presentation={message.presentation}
+            presentation={structuredPresentation}
             onEntitySelect={onOptionSelect}
+            optionsDisabled={optionsDisabled}
           />
         </div>
       )}
@@ -332,9 +418,9 @@ export function MessageBubble({
         />
       )}
 
-      {message.options && message.options.length > 0 && (
+      {showStructuredOptions(message) && (
         <div className="mt-4 flex flex-wrap gap-2">
-          {message.options.map((option) => (
+          {message.options!.map((option) => (
             <RichOptionCard
               key={option.message}
               option={option}

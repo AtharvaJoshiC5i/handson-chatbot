@@ -254,6 +254,9 @@ class PresentationService:
             "USAGE_SUMMARY": (
                 self._usage_summary
             ),
+            "USAGE_CURRENT": (
+                self._usage_current
+            ),
             "USAGE_HISTORY": (
                 self._usage_history
             ),
@@ -358,6 +361,12 @@ class PresentationService:
             "TICKET_UPDATE_LIST": (
                 self._ticket_update_list
             ),
+            "SUPPORT_TICKET_UPDATES": (
+                self._support_ticket_timeline
+            ),
+            "PAYMENT_RECONCILIATION": (
+                self._payment_reconciliation_summary
+            ),
             "BILL_ANOMALY_DETECTION": (
                 self._bill_anomaly
             ),
@@ -444,6 +453,170 @@ class PresentationService:
                 f"{data.get('period', '')}"
             ),
             items=items,
+        )
+
+    @staticmethod
+    def _usage_current(
+        data: dict[str, Any],
+    ) -> ChatPresentation:
+        usage_type = _label(
+            data.get("usage_type"),
+        )
+        unit = str(
+            data.get("unit", ""),
+        )
+        used = _usage_value(
+            data.get("used"),
+            unit,
+        )
+        period = str(
+            data.get("period", ""),
+        )
+
+        items: list[KeyValueItem] = [
+            KeyValueItem(
+                label=f"{usage_type} used",
+                value=used,
+            ),
+        ]
+
+        if data.get("is_unlimited"):
+            items.append(
+                KeyValueItem(
+                    label="Allowance",
+                    value="Unlimited",
+                ),
+            )
+        elif data.get("allowance") is not None:
+            items.append(
+                KeyValueItem(
+                    label="Allowance",
+                    value=_usage_value(
+                        data.get("allowance"),
+                        unit,
+                    ),
+                ),
+            )
+
+        if data.get("remaining") is not None and not data.get(
+            "is_unlimited",
+        ):
+            items.append(
+                KeyValueItem(
+                    label="Remaining",
+                    value=_usage_value(
+                        data.get("remaining"),
+                        unit,
+                    ),
+                ),
+            )
+
+        plan_name = data.get("plan_name")
+        title = f"Usage · {period}" if period else "Usage"
+
+        if plan_name:
+            title = f"{title} · {plan_name}"
+
+        return KeyValuePresentation(
+            title=title,
+            items=items,
+        )
+
+    @staticmethod
+    def _support_ticket_timeline(
+        data: dict[str, Any],
+    ) -> ChatPresentation:
+        ticket = data.get(
+            "ticket",
+            {},
+        )
+        ticket_id = str(
+            ticket.get(
+                "ticket_id",
+                "",
+            ),
+        )
+        items: list[ListItem] = []
+
+        for update in data.get(
+            "updates",
+            [],
+        ):
+            items.append(
+                ListItem(
+                    label=str(
+                        update.get(
+                            "updated_at",
+                            "",
+                        ),
+                    ),
+                    value=_label(
+                        update.get(
+                            "status",
+                        ),
+                    ),
+                    detail=str(
+                        update.get(
+                            "note",
+                            "",
+                        ),
+                    ),
+                ),
+            )
+
+        return ListPresentation(
+            title=(
+                f"Ticket timeline · {ticket_id}"
+                if ticket_id
+                else "Ticket timeline"
+            ),
+            items=items,
+        )
+
+    @staticmethod
+    def _payment_reconciliation_summary(
+        data: dict[str, Any],
+    ) -> ChatPresentation:
+        bill = data.get(
+            "bill",
+            {},
+        )
+        payment = {
+            "successful_paid_amount": data.get(
+                "successful_paid_amount",
+                0,
+            ),
+            "outstanding_amount": data.get(
+                "outstanding_amount",
+                0,
+            ),
+            "failed_attempt_count": data.get(
+                "failed_attempt_count",
+                0,
+            ),
+            "failed_attempt_amount": data.get(
+                "failed_attempt_amount",
+                0,
+            ),
+            "pending_attempt_count": data.get(
+                "pending_attempt_count",
+                0,
+            ),
+            "pending_amount": data.get(
+                "pending_amount",
+                0,
+            ),
+            "attempt_count": data.get(
+                "attempt_count",
+                0,
+            ),
+        }
+
+        return PresentationService._bill_payment(
+            {
+                "bill": bill,
+                "payment": payment,
+            },
         )
 
     @staticmethod

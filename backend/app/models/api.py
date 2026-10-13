@@ -351,6 +351,26 @@ class Customer360Presentation(BaseModel):
     tables: list[Customer360Table]
 
 
+class ChoiceListPresentation(BaseModel):
+    """Structured disambiguation choices for ambiguous turns."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["choice_list"] = "choice_list"
+    title: str | None = None
+    prompt: str | None = None
+    choices: list[ChatOption] = Field(min_length=1)
+
+
+class PresentationMeta(BaseModel):
+    """Trust context shown with structured answers."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    period_label: str | None = None
+    scope_label: str | None = None
+
+
 ChatPresentation = (
     KeyValuePresentation
     | ComparisonPresentation
@@ -360,6 +380,7 @@ ChatPresentation = (
     | SummaryPresentation
     | PlanRecommendationPresentation
     | Customer360Presentation
+    | ChoiceListPresentation
 )
 
 
@@ -377,9 +398,56 @@ class ChatResponse(BaseModel):
         discriminator="type",
     )
 
+    presentation_meta: PresentationMeta | None = None
+
     options: list[ChatOption] = Field(
         default_factory=list
     )
+
+
+class ChatConversationSummary(BaseModel):
+    """One persisted chat thread."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    conversation_id: str
+    customer_id: str
+    customer_name: str
+    title: str
+    created_at: str
+    updated_at: str
+
+
+class ChatConversationListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    conversations: list[ChatConversationSummary]
+
+
+class ChatHistoryMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    role: Literal["user", "assistant"]
+    content: str
+    status: str | None = None
+    source: str | None = None
+    presentation: ChatPresentation | None = Field(
+        default=None,
+        discriminator="type",
+    )
+    presentation_meta: PresentationMeta | None = None
+    options: list[ChatOption] = Field(default_factory=list)
+    created_at: str
+
+
+class ChatConversationMessagesResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    conversation_id: str
+    customer_id: str
+    customer_name: str
+    messages: list[ChatHistoryMessage]
 
 
 class HealthResponse(BaseModel):

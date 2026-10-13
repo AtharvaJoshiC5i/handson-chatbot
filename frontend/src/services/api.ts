@@ -4,8 +4,11 @@ import type {
   DemoCustomer,
 } from "../types/account";
 import type {
+  ChatConversationSummary,
+  ChatMessage,
   ChatOption,
   ChatPresentation,
+  PresentationMeta,
   ChatResponse,
   ChatResponseStatus,
   ComparisonColumn,
@@ -66,6 +69,38 @@ function isChatStatus(value: unknown): value is ChatResponseStatus {
     typeof value === "string" &&
     VALID_STATUSES.includes(value as ChatResponseStatus)
   );
+}
+
+function parsePresentationMeta(
+  value: unknown,
+): PresentationMeta | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const period_label = isNullableString(value.period_label)
+    ? value.period_label
+    : null;
+  const scope_label = isNullableString(value.scope_label)
+    ? value.scope_label
+    : null;
+
+  if (!period_label && !scope_label) {
+    return null;
+  }
+
+  return {
+    period_label,
+    scope_label,
+  };
 }
 
 function parseOptions(value: unknown): ChatOption[] {
@@ -586,6 +621,25 @@ function parsePresentation(value: unknown): ChatPresentation | null {
       };
     }
 
+    case "choice_list": {
+      const choices = parseOptions(value.choices);
+
+      if (choices.length === 0) {
+        return null;
+      }
+
+      const prompt = isNullableString(value.prompt)
+        ? value.prompt
+        : null;
+
+      return {
+        type: "choice_list",
+        title,
+        prompt,
+        choices,
+      };
+    }
+
     default:
       /*
        * Unknown future presentation types intentionally fall back
@@ -622,6 +676,9 @@ function parseChatResponse(
     status: responseBody.status,
     source,
     presentation: parsePresentation(responseBody.presentation),
+    presentation_meta: parsePresentationMeta(
+      responseBody.presentation_meta,
+    ),
     options: parseOptions(responseBody.options),
   };
 }
@@ -1102,4 +1159,168 @@ export async function streamChatMessage(
       response.status,
     );
   }
+}
+
+function parseConversationSummary(
+  value: unknown,
+): ChatConversationSummary | null {
+  if (
+    !isRecord(value)
+    || !isString(value.conversation_id)
+    || !isString(value.customer_id)
+    || !isString(value.customer_name)
+    || !isString(value.title)
+    || !isString(value.created_at)
+    || !isString(value.updated_at)
+  ) {
+    return null;
+  }
+
+  return {
+    conversation_id: value.conversation_id,
+    customer_id: value.customer_id,
+    customer_name: value.customer_name,
+    title: value.title,
+    created_at: value.created_at,
+    updated_at: value.updated_at,
+  };
+}
+
+export async function listChatConversations(
+  customerId: string,
+  scope: "customer" | "all" = "all",
+  signal?: AbortSignal,
+): Promise<ChatConversationSummary[]> {
+  const query = scope === "all" ? "?scope=all" : "";
+  const response = await fetch(
+    `${API_BASE_URL}/chat/conversations${query}`,
+    {
+      headers: { "X-Customer-ID": customerId },
+      signal,
+    },
+  );
+
+  let body: unknown = null;
+
+  try {
+    body = await response.json();
+  } catch {
+    // ignore
+  }
+
+  if (!response.ok) {
+    throw new ApiError(
+      getErrorMessage(body, response.status),
+      response.status,
+    );
+  }
+
+  if (!isRecord(body) || !Array.isArray(body.conversations)) {
+    return [];
+  }
+
+  return body.conversations.flatMap((item) => {
+    const parsed = parseConversationSummary(item);
+    return parsed ? [parsed] : [];
+  });
+}
+
+function parseHistoryMessage(value: unknown): ChatMessage | null {
+  if (
+    !isRecord(value)
+    || !isString(value.id)
+    || (value.role !== "user" && value.role !== "assistant")
+    || !isString(value.content)
+    || !isString(value.created_at)
+  ) {
+    return null;
+  }
+
+  const status = isChatStatus(value.status) ? value.status : undefined;
+  const source = isNullableString(value.source) ? value.source : undefined;
+  const presentation = parsePresentation(value.presentation);
+  const presentationMeta = parsePresentationMeta(
+    value.presentation_meta,
+  );
+  const options = parseOptions(value.options);
+
+  return {
+    id: value.id,
+    role: value.role,
+    content: value.content,
+    status,
+    source,
+    presentation,
+    presentationMeta,
+    options,
+    createdAt: new Date(value.created_at),
+  };
+}
+
+export async function getChatConversationMessages(
+  customerId: string,
+  conversationId: string,
+  signal?: AbortSignal,
+): Promise<ChatMessage[]> {
+  const response = await fetch(
+    `${API_BASE_URL}/chat/conversations/${encodeURIComponent(conversationId)}/messages`,
+    {
+      headers: { "X-Customer-ID": customerId },
+      signal,
+    },
+  );
+
+  let body: unknown = null;
+
+  try {
+    body = await response.json();
+  } catch {
+    // ignore
+  }
+
+  if (!response.ok) {
+    throw new ApiError(
+      getErrorMessage(body, response.status),
+      response.status,
+    );
+  }
+
+  if (!isRecord(body) || !Array.isArray(body.messages)) {
+    return [];
+  }
+
+  return body.messages.flatMap((item) => {
+    const parsed = parseHistoryMessage(item);
+    return parsed ? [parsed] : [];
+  });
+}
+
+export async function deleteChatConversation(
+  customerId: string,
+  conversationId: string,
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE_URL}/chat/conversations/${encodeURIComponent(conversationId)}`,
+    {
+      method: "DELETE",
+      headers: { "X-Customer-ID": customerId },
+    },
+  );
+
+  if (response.status === 204) {
+    return;
+  }
+
+  let body: unknown = null;
+
+  try {
+    body = await response.json();
+  } catch {
+    // ignore
+  }
+
+  throw new ApiError(
+    getErrorMessage(body, response.status),
+    response.status,
+  );
 }

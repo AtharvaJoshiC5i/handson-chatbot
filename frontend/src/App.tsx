@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   CircleAlert,
@@ -9,15 +9,22 @@ import {
   UserRound,
 } from "lucide-react";
 
+import { ChatHistoryList } from "./components/ChatHistoryList";
+import { ConfirmDialog } from "./components/ConfirmDialog";
 import { ChatWindow } from "./components/ChatWindow";
 import { CustomerSelector } from "./components/CustomerSelector";
 import { MessageInput } from "./components/MessageInput";
+import { ChatAccountGlance } from "./components/ChatAccountGlance";
 import { WelcomePanel } from "./components/WelcomePanel";
 import { DatabaseExplorerPage } from "./pages/DatabaseExplorerPage";
+import { metadataCompletesStreamingTurn } from "./utils/streamingTurn";
 import {
+  deleteChatConversation,
   getAccountSnapshot,
+  getChatConversationMessages,
   getCustomerProfile,
   getDemoCustomers,
+  listChatConversations,
   resetConversationContext,
   streamChatMessage,
 } from "./services/api";
@@ -27,7 +34,10 @@ import type {
   CustomerProfile,
   DemoCustomer,
 } from "./types/account";
-import type { ChatMessage } from "./types/chat";
+import type {
+  ChatConversationSummary,
+  ChatMessage,
+} from "./types/chat";
 
 type AppPage = "support" | "database";
 
@@ -61,8 +71,33 @@ export default function App() {
   const [snapshot, setSnapshot] = useState<AccountSnapshot | null>(null);
   const [snapshotLoading, setSnapshotLoading] = useState(true);
   const [demoCustomers, setDemoCustomers] = useState<DemoCustomer[]>([]);
+  const [chatHistory, setChatHistory] = useState<ChatConversationSummary[]>(
+    [],
+  );
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [loadingConversation, setLoadingConversation] = useState(false);
+  const [deletePending, setDeletePending] =
+    useState<ChatConversationSummary | null>(null);
+  const [deletingConversation, setDeletingConversation] = useState(false);
 
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const refreshChatHistory = useCallback(() => {
+    setHistoryLoading(true);
+
+    void listChatConversations(customerId, "all")
+      .then(setChatHistory)
+      .catch(() => {
+        // History is optional when the backend is offline.
+      })
+      .finally(() => {
+        setHistoryLoading(false);
+      });
+  }, [customerId]);
+
+  useEffect(() => {
+    refreshChatHistory();
+  }, [refreshChatHistory]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -107,6 +142,10 @@ export default function App() {
   }, []);
 
   const hasConversation = messages.length > 0;
+  const assistantReplyInFlight = messages.some(
+    (message) =>
+      message.role === "assistant" && message.isStreaming,
+  );
   const displayName = profile?.name ?? customerId;
 
   const handleCustomerChange = (nextCustomerId: string) => {
@@ -119,7 +158,7 @@ export default function App() {
   };
 
   const handleNewConversation = () => {
-    if (loading) {
+    if (loading || loadingConversation) {
       return;
     }
 
@@ -131,12 +170,104 @@ export default function App() {
     setAppPage("support");
   };
 
+  const handleSelectHistory = async (
+    conversation: ChatConversationSummary,
+  ) => {
+    if (loading || loadingConversation) {
+      return;
+    }
+
+    if (conversation.conversation_id === conversationId) {
+      setAppPage("support");
+      return;
+    }
+
+    void resetConversationContext(customerId, conversationId);
+
+    setLoadingConversation(true);
+    setError(null);
+    setAppPage("support");
+    setCustomerId(conversation.customer_id);
+    setConversationId(conversation.conversation_id);
+
+    try {
+      const restored = await getChatConversationMessages(
+        conversation.customer_id,
+        conversation.conversation_id,
+      );
+      setMessages(restored);
+    } catch (historyError: unknown) {
+      setMessages([]);
+      setError(
+        historyError instanceof Error
+          ? historyError.message
+          : "Could not load this conversation.",
+      );
+    } finally {
+      setLoadingConversation(false);
+    }
+  };
+
+  const handleDeleteHistory = (
+    conversation: ChatConversationSummary,
+  ) => {
+    if (loading || loadingConversation || deletingConversation) {
+      return;
+    }
+
+    setDeletePending(conversation);
+  };
+
+  const handleCancelDeleteHistory = () => {
+    if (deletingConversation) {
+      return;
+    }
+
+    setDeletePending(null);
+  };
+
+  const handleConfirmDeleteHistory = async () => {
+    if (!deletePending || deletingConversation) {
+      return;
+    }
+
+    const conversation = deletePending;
+    setDeletingConversation(true);
+
+    try {
+      await deleteChatConversation(
+        conversation.customer_id,
+        conversation.conversation_id,
+      );
+
+      if (conversation.conversation_id === conversationId) {
+        void resetConversationContext(customerId, conversationId);
+        setConversationId(createConversationId());
+        setMessages([]);
+        setError(null);
+      }
+
+      setDeletePending(null);
+      refreshChatHistory();
+    } catch (deleteError: unknown) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Could not delete this conversation.",
+      );
+    } finally {
+      setDeletingConversation(false);
+    }
+  };
+
   const handleSend = async (messageText: string) => {
     const trimmedMessage = messageText.trim();
 
-    if (!trimmedMessage || loading) {
+    if (!trimmedMessage) {
       return;
     }
+
+    abortControllerRef.current?.abort();
 
     setError(null);
     setAppPage("support");
@@ -177,9 +308,16 @@ export default function App() {
           onMetadata: (response) => {
             widgetOnlyResponse =
               response.presentation?.type === "customer_360";
+            const isChoiceList =
+              response.presentation?.type === "choice_list";
             const metadataMessage = response.message?.trim() ?? "";
+            const metadataEndsTurn =
+              metadataCompletesStreamingTurn(response);
             useMetadataMessageOnly =
-              !widgetOnlyResponse && metadataMessage.length > 0;
+              metadataEndsTurn
+              && metadataMessage.length > 0
+              && !widgetOnlyResponse
+              && !isChoiceList;
 
             setMessages((current) =>
               current.map((message) =>
@@ -192,11 +330,20 @@ export default function App() {
                       status: response.status,
                       source: response.source,
                       presentation: response.presentation,
+                      presentationMeta:
+                        response.presentation_meta ?? null,
                       options: response.options,
+                      isStreaming: metadataEndsTurn
+                        ? false
+                        : message.isStreaming,
                     }
                   : message,
               ),
             );
+
+            if (metadataEndsTurn) {
+              setLoading(false);
+            }
           },
           onText: (text) => {
             if (widgetOnlyResponse || useMetadataMessageOnly) {
@@ -204,6 +351,7 @@ export default function App() {
             }
 
             streamedText += text;
+            setLoading(false);
             setMessages((current) =>
               current.map((message) =>
                 message.id === assistantMessageId
@@ -239,9 +387,23 @@ export default function App() {
             return [message];
           }
 
-          return streamedText
-            ? [{ ...message, isStreaming: false }]
-            : [];
+          const hasVisibleReply =
+            Boolean(message.content?.trim())
+            || message.presentation != null
+            || (message.options?.length ?? 0) > 0
+            || streamedText.length > 0;
+
+          if (!hasVisibleReply) {
+            return [];
+          }
+
+          return [
+            {
+              ...message,
+              content: message.content || streamedText,
+              isStreaming: false,
+            },
+          ];
         }),
       );
 
@@ -251,14 +413,30 @@ export default function App() {
     } finally {
       if (abortControllerRef.current === abortController) {
         abortControllerRef.current = null;
+        setLoading(false);
       }
 
-      setLoading(false);
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === assistantMessageId
+            ? { ...message, isStreaming: false }
+            : message,
+        ),
+      );
+      refreshChatHistory();
     }
   };
 
   const handleStop = () => {
     abortControllerRef.current?.abort();
+    setLoading(false);
+    setMessages((current) =>
+      current.map((message) =>
+        message.role === "assistant" && message.isStreaming
+          ? { ...message, isStreaming: false }
+          : message,
+      ),
+    );
   };
 
   const sharedHeader = (
@@ -285,45 +463,19 @@ export default function App() {
 
   return (
     <div className="app-shell flex h-dvh min-h-0 overflow-hidden font-sans text-[var(--color-ink)]">
-      <aside className="surface-sidebar hidden w-[220px] shrink-0 flex-col border-r border-[var(--color-line)] lg:flex">
-        <div className="flex h-16 items-center gap-3 border-b border-[var(--color-line)] px-4">
-          <span className="grid size-9 place-items-center rounded-lg bg-white text-[var(--color-brand)] shadow-sm ring-1 ring-[var(--color-line)]">
-            <Signal size={17} strokeWidth={2} aria-hidden="true" />
+      <aside className="app-sidebar surface-sidebar hidden min-h-0 shrink-0 flex-col lg:flex">
+        <div className="app-sidebar-brand">
+          <span className="app-sidebar-brand-icon" aria-hidden="true">
+            <Signal size={17} strokeWidth={2} />
           </span>
-          <div>
-            <span className="block text-[15px] font-semibold tracking-tight text-[var(--color-brand)]">
-              NexaTel
-            </span>
-            <span className="mt-0.5 block text-[10px] text-[var(--color-muted)]">
-              Self-care demo
-            </span>
+          <div className="min-w-0">
+            <span className="app-sidebar-brand-title">NexaTel</span>
+            <span className="app-sidebar-brand-subtitle">Self-care demo</span>
           </div>
         </div>
 
-        {appPage === "support" && (
-          <div className="px-3 pt-4">
-            <button
-              type="button"
-              onClick={handleNewConversation}
-              disabled={loading}
-              className={[
-                "flex h-9 w-full items-center justify-center gap-2 rounded-lg",
-                "bg-[var(--color-brand)] px-3 text-[12px] font-medium text-white",
-                "shadow-sm transition hover:bg-[var(--color-brand-hover)]",
-                "disabled:opacity-40",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2f654f]/40",
-              ].join(" ")}
-            >
-              <Plus size={14} strokeWidth={2} aria-hidden="true" />
-              New chat
-            </button>
-          </div>
-        )}
-
-        <nav className="space-y-0.5 px-3 pt-4" aria-label="Workspace">
-          <p className="px-3 pb-1.5 text-[10px] font-medium uppercase tracking-wide text-[#8a968d]">
-            Workspace
-          </p>
+        <nav className="app-sidebar-nav" aria-label="Workspace">
+          <p className="app-sidebar-section-label">Workspace</p>
           <button
             type="button"
             onClick={() => setAppPage("support")}
@@ -344,19 +496,48 @@ export default function App() {
           </button>
         </nav>
 
-        <div className="mt-auto border-t border-[#e3e9e4] px-4 py-4">
-          <div className="flex items-center gap-3 px-2 py-1.5">
-            <span className="grid size-8 shrink-0 place-items-center rounded-md bg-white text-[#52715d] ring-1 ring-[#dfe7e0]">
-              <UserRound size={16} strokeWidth={1.8} aria-hidden="true" />
-            </span>
-            <div className="min-w-0">
-              <span className="block text-[10px] text-[#7a897f]">
-                Demo account
-              </span>
-              <span className="mt-0.5 block truncate text-[11px] font-semibold text-[#2c4336]">
-                {displayName}
-              </span>
+        {appPage === "support" && (
+          <section
+            className="app-sidebar-chats"
+            aria-label="Conversations"
+          >
+            <button
+              type="button"
+              onClick={handleNewConversation}
+              disabled={loading || loadingConversation}
+              className="app-sidebar-new-chat"
+            >
+              <Plus size={15} strokeWidth={2} aria-hidden="true" />
+              New chat
+            </button>
+
+            <p className="app-sidebar-section-label app-sidebar-section-label--chats">
+              Recent chats
+            </p>
+            <div className="app-sidebar-history-scroll">
+              <ChatHistoryList
+                conversations={chatHistory}
+                activeConversationId={conversationId}
+                loading={historyLoading}
+                disabled={loading || loadingConversation}
+                onSelect={handleSelectHistory}
+                onDelete={handleDeleteHistory}
+              />
             </div>
+          </section>
+        )}
+
+        {appPage !== "support" && (
+          <div className="min-h-0 flex-1" aria-hidden="true" />
+        )}
+
+        <div className="app-sidebar-account">
+          <span className="app-sidebar-account-icon" aria-hidden="true">
+            <UserRound size={16} strokeWidth={1.8} />
+          </span>
+          <div className="min-w-0">
+            <span className="app-sidebar-account-label">Account Name</span>
+            <span className="app-sidebar-account-name">{displayName}</span>
           </div>
         </div>
       </aside>
@@ -394,6 +575,12 @@ export default function App() {
                   />
                 )}
 
+                {hasConversation && snapshot && (
+                  <div className="shrink-0 px-4 pb-2">
+                    <ChatAccountGlance snapshot={snapshot} />
+                  </div>
+                )}
+
                 {error && (
                   <div className="shrink-0 px-4 pb-2">
                     <div
@@ -410,7 +597,7 @@ export default function App() {
                   <MessageInput
                     onSend={handleSend}
                     onStop={handleStop}
-                    disabled={loading}
+                    disabled={assistantReplyInFlight}
                   />
                 </div>
               </div>
@@ -450,6 +637,24 @@ export default function App() {
           </button>
         </nav>
       </div>
+
+      <ConfirmDialog
+        open={deletePending != null}
+        title="Delete this chat?"
+        description={
+          deletePending
+            ? `This removes "${deletePending.title}" for ${deletePending.customer_name}. This cannot be undone.`
+            : ""
+        }
+        confirmLabel="Delete chat"
+        cancelLabel="Keep chat"
+        confirmTone="danger"
+        loading={deletingConversation}
+        onConfirm={() => {
+          void handleConfirmDeleteHistory();
+        }}
+        onCancel={handleCancelDeleteHistory}
+      />
     </div>
   );
 }
