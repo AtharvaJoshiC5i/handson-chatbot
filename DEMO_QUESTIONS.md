@@ -64,7 +64,7 @@ Use **New chat** on the welcome screen for proactive snapshot (plan / usage / bi
 - Break down my current bill.
 - Break down my bill for September 2026.
 - Show bill BILL009.
-- Compare BILL009 and BILL010.
+- Compare BILL008 and BILL011.
 - Why did my bill change from last month?
 - Show my last 5 bills.
 - Show my bill trend over the last 6 months.
@@ -83,16 +83,13 @@ Use **New chat** on the welcome screen for proactive snapshot (plan / usage / bi
 - Show my recent payments
 - Show my last 5 payments.
 - What is the status of my latest payment?
-- Has my latest payment gone through?
 - Summarize my payments this year.
 - How many payments were successful this month?
 - Did my last payment fail? Why did it fail?
 - List my failed payments this year.
 - How much is still outstanding on my current bill?
-- Reconcile my current bill and payments.
 - Is autopay enabled?
 - Which payment method is on file?
-- Payment with reference TXN2026000006.
 
 ## Support
 
