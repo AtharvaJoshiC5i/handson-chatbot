@@ -49,7 +49,7 @@ export function ChatWindow({
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain scrollbar-none [&::-webkit-scrollbar]:hidden">
-      <div className="mx-auto flex w-full max-w-[760px] flex-col gap-7 px-4 py-7 sm:px-6 sm:py-8">
+      <div className="mx-auto flex w-full max-w-[760px] flex-col gap-8 px-4 py-7 sm:px-6 sm:py-8">
         {messages.map(
           (message, messageIndex) => (
             <MessageBubble

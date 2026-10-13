@@ -291,7 +291,7 @@ export function MessageBubble({
     return (
       <div className="group flex w-full justify-end">
         <div className="max-w-[88%] sm:max-w-[76%]">
-          <div className="rounded-2xl rounded-br-md border border-[var(--color-line)] bg-white px-4 py-2.5 text-[13px] leading-relaxed text-[var(--color-ink)] shadow-sm">
+          <div className="message-bubble-user rounded-2xl rounded-br-md px-4 py-2.5 text-[13px] leading-relaxed text-[var(--color-ink)]">
             <p className="whitespace-pre-wrap break-words">
               {message.content}
             </p>

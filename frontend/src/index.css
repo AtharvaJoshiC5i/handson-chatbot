@@ -111,6 +111,18 @@ button:disabled {
     );
 }
 
+.message-bubble-user {
+  border: 1px solid rgba(47, 101, 79, 0.12);
+  background: linear-gradient(
+    180deg,
+    #ffffff 0%,
+    #f9fbf9 100%
+  );
+  box-shadow:
+    0 1px 2px rgba(23, 60, 50, 0.04),
+    0 6px 16px rgba(23, 60, 50, 0.035);
+}
+
 .surface-sidebar {
   background: linear-gradient(
     180deg,
@@ -3345,11 +3357,14 @@ button:disabled {
 
 .composer-footnote {
   margin-top: 0.625rem;
+  margin-left: auto;
+  margin-right: auto;
+  max-width: 26rem;
   text-align: center;
   font-size: 0.625rem;
-  line-height: 1.45;
+  line-height: 1.5;
   letter-spacing: 0.02em;
-  color: #8a968d;
+  color: #96a198;
 }
 
 @media (prefers-reduced-motion: reduce) {
